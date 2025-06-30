@@ -67,6 +67,9 @@ async def signup(
         else:
             # Unexpected case where user creation failed
             raise HTTPException(status_code=400, detail="Signup failed")
+    except HTTPException as http_exc:
+        # Re-raise HTTP exceptions to maintain the status code and detail
+        raise http_exc
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Signup failed: {e}")
 
@@ -86,6 +89,8 @@ async def signin(
         )
         if response.user is None:
             raise HTTPException(status_code=401, detail="Invalid email or password.")
+        if response.user.email is None:
+            raise HTTPException(status_code=400, detail="Email is required for signin.")
         # If signin succeeds, response.session will be present
         session = Session(
             user_id=response.user.id,
@@ -138,6 +143,10 @@ async def confirm_email(request: ConfirmRequest) -> SessionReponse | HTTPExcepti
             raise HTTPException(
                 status_code=400, detail="Invalid or expired access token."
             )
+        if response.user.email is None:
+            raise HTTPException(
+                status_code=400, detail="Email is required for email confirmation."
+            )
 
         session = Session(
             user_id=response.user.id,
@@ -171,20 +180,26 @@ async def is_authenticated() -> AuthResponse:
     try:
         client = await get_client()
         session = await client.auth.get_session()
-        if session:
-            return AuthResponse(
-                authenticated=True,
-                session=Session(
-                    user_id=session.user.id,
-                    user_email=session.user.email,
-                    email_confirmed=session.user.email_confirmed_at is not None,
-                    access_token=session.access_token,
-                    refresh_token=session.refresh_token,
-                    expires_at=int(time.time()) + session.expires_in,
-                ),
-            )
-        else:
+        if session is None:
+            # If no session exists, treat as unauthenticated
             return AuthResponse(authenticated=False)
+        if session.user is None:
+            # If the session exists but no user is associated, treat as unauthenticated
+            return AuthResponse(authenticated=False)
+        if session.user.email is None:
+            # If the user email is not set, treat as unauthenticated
+            return AuthResponse(authenticated=False)
+        return AuthResponse(
+            authenticated=True,
+            session=Session(
+                user_id=session.user.id,
+                user_email=session.user.email,
+                email_confirmed=session.user.email_confirmed_at is not None,
+                access_token=session.access_token,
+                refresh_token=session.refresh_token,
+                expires_at=int(time.time()) + session.expires_in,
+            ),
+        )
     except Exception as e:
         # Log unexpected errors but don’t expose them to the client
         logger.warning(f"Error checking authentication: {e}")
@@ -232,6 +247,10 @@ async def reset_password(
             raise HTTPException(
                 status_code=400, detail="Invalid or expired access token."
             )
+        if response.user.email is None:
+            raise HTTPException(
+                status_code=400, detail="Email is required for password reset."
+            )
 
         logger.info(f"Session set: user={response.user.id}")
 
@@ -252,6 +271,9 @@ async def reset_password(
         return StatusResponse(
             message="Password reset successfully",
         )
+    except HTTPException as http_exc:
+        # Re-raise HTTP exceptions to maintain the status code and detail
+        raise http_exc
     except Exception as e:
         raise HTTPException(
             status_code=400, detail=f"Invalid or expired token: {str(e)}"
