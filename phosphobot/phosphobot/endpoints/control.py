@@ -1070,6 +1070,8 @@ async def start_auto_control(
 
     supabase_client = await get_client()
     user = await supabase_client.auth.get_user()
+    if user is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     await (
         supabase_client.table("ai_control_sessions")
         .upsert(

@@ -37,8 +37,12 @@ async def signup(
         response = await client.auth.sign_up(
             {"email": credentials.email, "password": credentials.password}
         )
-        if response.user:
-            if response.session:
+        if response.user is not None:
+            if response.session is not None:
+                if response.user.email is None:
+                    raise HTTPException(
+                        status_code=400, detail="Email is required for signup."
+                    )
                 # Case where email confirmation is disabled, and a session is returned
                 session = Session(
                     user_id=response.user.id,
@@ -80,6 +84,8 @@ async def signin(
         response = await client.auth.sign_in_with_password(
             {"email": credentials.email, "password": credentials.password}
         )
+        if response.user is None:
+            raise HTTPException(status_code=401, detail="Invalid email or password.")
         # If signin succeeds, response.session will be present
         session = Session(
             user_id=response.user.id,
@@ -128,6 +134,10 @@ async def confirm_email(request: ConfirmRequest) -> SessionReponse | HTTPExcepti
             access_token=request.access_token,
             refresh_token=request.refresh_token,
         )
+        if response.user is None:
+            raise HTTPException(
+                status_code=400, detail="Invalid or expired access token."
+            )
 
         session = Session(
             user_id=response.user.id,
@@ -218,6 +228,11 @@ async def reset_password(
             access_token=request.access_token,
             refresh_token=request.refresh_token,
         )
+        if response.user is None:
+            raise HTTPException(
+                status_code=400, detail="Invalid or expired access token."
+            )
+
         logger.info(f"Session set: user={response.user.id}")
 
         # Update the user's password
