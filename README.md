@@ -36,7 +36,14 @@ phosphobot run
 # Upgrade it with brew or with apt
 # sudo apt update && sudo apt install phosphobot
 # brew update && brew upgrade phosphobot
+# powershell -ExecutionPolicy ByPass -Command "irm https://raw.githubusercontent.com/phospho-app/phosphobot/main/install.ps1 | iex"
 ```
+
+This will:
+
+- on mac: use brew to install phosphobot
+- on linux: install phosphobot through apt
+- on windows: install a .exe
 
 ### 3. Make your robot move for the first time!
 
@@ -47,6 +54,8 @@ You will be able to control your robot with:
 - the keyboard
 - a leader arm
 - a Meta Quest if you have the phospho teleop app
+
+> _Note: port 80 might already be in use, if that's the case, the server will spin up on localhost:8080_
 
 ### 4. Record a dataset
 
