@@ -1,6 +1,6 @@
-# phosphobot
+# Control AI robots
 
-**phosphobot** is a community-driven platform that enables you to train and use VLA (vision language action models) to control real robots.
+**phospho** (or **phosphobot**) is a software that lets you control robots, record data, train and use VLA (vision language action models).
 
 <div align="center">
 
