@@ -1,4 +1,4 @@
-# Control AI robots
+# Control AI robots with phospho
 
 **phospho** (or **phosphobot**) is a software that lets you control robots, record data, train and use VLA (vision language action models).
 
@@ -10,7 +10,7 @@
 
 </div>
 
-## Overview
+## Overview of phospho
 
 - 🕹️ Control your robot with the keyboard, a leader arm, a Meta Quest headset or via API
 - 📹 Teleoperate robots to record datasets in LeRobot dataset format
@@ -20,7 +20,7 @@
 - 🦾 Compatible with the SO-100, SO-101, WX-250 and AgileX Piper
 - 🔧 Extend it with your own robots and cameras
 
-## Getting started
+## Getting started with phosphobot
 
 ### 1. Get a SO-100 robot
 
