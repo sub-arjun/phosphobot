@@ -198,8 +198,13 @@ def _find_cameras(
 
     camera_ids = []
     for camera_idx in possible_camera_ids:
-        camera = cv2.VideoCapture(camera_idx)
-        is_open = camera.isOpened()
+        try:
+            camera = cv2.VideoCapture(camera_idx)
+            is_open = camera.isOpened()
+        except cv2.error as e:
+            logger.warning(f"Failed to open camera at index {camera_idx}: {e}.")
+            is_open = False
+            continue
 
         if not is_open:
             continue
@@ -385,6 +390,7 @@ class VideoCamera(threading.Thread, BaseCamera):
     last_frame: Optional[cv2.typing.MatLike] = None
     lock: threading.Lock
     _stop_event: threading.Event
+    video: Optional[cv2.VideoCapture] = None
 
     def __init__(
         self,
@@ -425,12 +431,24 @@ class VideoCamera(threading.Thread, BaseCamera):
         logger.debug(f"{self.camera_name}: Stopping. is_active={self.is_active}")
         if not self.is_active:
             return
-        self._stop_event.set()
-        if self.video:
-            self.video.release()
         self.is_active = False
+        self._stop_event.set()
+        try:
+            if self.video:
+                # If you don't wait and the camera is currently used (eg: streamed or recording)
+                # Then OpenCV will crash with error 139. This small waits for the .is_active=False
+                # just above to propagate before releasing the OpenCV camera.
+                time.sleep(0.1)
+                self.video.release()
+        except Exception:
+            pass
+        finally:
+            self.video = None
 
     def init_camera(self) -> bool:
+        if not self.video:
+            return False
+
         try:
             if self.video.isOpened():
                 self.video.set(
@@ -463,7 +481,11 @@ Camera type: {self.camera_type}""")
             return None
 
         with self.lock:
-            while not self._stop_event.is_set():
+            while (
+                not self._stop_event.is_set()
+                and self.video is not None
+                and self.is_active
+            ):
                 if self.camera_type == "dummy" or self.camera_type == "dummy_stereo":
                     # No need to read frames from a dummy camera
                     time.sleep(0.1)
@@ -793,11 +815,12 @@ try:
 
         def stop(self) -> None:
             if self.is_active:
+                self.is_active = False
                 try:
+                    time.sleep(0.1)
                     self.pipeline.stop()
                 except Exception as e:
                     logger.warning(f"{self.camera_name} failed to stop: {str(e)}")
-                self.is_active = False
 
     class RealSenseVirtualCamera(VideoCamera):
         def __init__(
@@ -884,6 +907,7 @@ class AllCameras:
     _main_camera: BaseCamera | None = None
     # If it's None, record everything. Otherwise, record only the corresponding cameras
     _cameras_ids_to_record: List[int]
+    _is_detecting: bool = False
 
     def __init__(self, disabled_cameras: list[int] | None = None):
         """
@@ -905,6 +929,11 @@ class AllCameras:
         """
         Detect all cameras connected to the computer and initialize them.
         """
+        if self._is_detecting:
+            logger.warning("Cameras are already being detected, skipping")
+            return
+
+        self._is_detecting = True
         self.video_cameras = []
         self.camera_ids = []
         self.camera_names = []
@@ -1019,6 +1048,7 @@ class AllCameras:
                 )
 
         self._cameras_ids_to_record = self.camera_ids
+        self._is_detecting = False
 
     def refresh(self) -> None:
         """
@@ -1027,6 +1057,7 @@ class AllCameras:
         """
         # First, stop all cameras
         self.stop()
+        time.sleep(0.1)
         # Then, reinitialize the cameras
         self.detect_cameras()
 
