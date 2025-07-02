@@ -285,10 +285,7 @@ class BaseCamera(ABC):
     height: int
     fps: int
 
-    def __init__(self, width: int, height: int, fps: int, *args, **kwargs):
-        self.width = width
-        self.height = height
-        self.fps = fps
+    def __init__(self):
         atexit.register(self.stop)
 
     def __del__(self):
@@ -394,13 +391,10 @@ class VideoCamera(threading.Thread, BaseCamera):
         video: Optional[cv2.VideoCapture] = None,
         disable: bool = False,
         camera_id: Optional[int] = 0,
-        width: int = 640,
-        height: int = 480,
-        fps: int = 22,
         camera_type: Optional[CameraTypes] = None,
     ):
         threading.Thread.__init__(self)
-        BaseCamera.__init__(self, width=width, height=height, fps=fps)
+        BaseCamera.__init__(self)
 
         if camera_type:
             self.camera_type = camera_type
@@ -415,6 +409,7 @@ class VideoCamera(threading.Thread, BaseCamera):
             self.video = video
         else:
             self.video = cv2.VideoCapture()
+
         self.is_active = self.init_camera()
         if self.is_active:
             self.lock = threading.Lock()
@@ -441,6 +436,10 @@ class VideoCamera(threading.Thread, BaseCamera):
                 self.video.set(
                     cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc("M", "J", "P", "G")
                 )
+                # Get the width, height, and fps of the camera
+                self.width = int(self.video.get(cv2.CAP_PROP_FRAME_WIDTH))
+                self.height = int(self.video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                self.fps = int(self.video.get(cv2.CAP_PROP_FPS))
             else:
                 logger.warning(f"{self.camera_name}: Failed to open")
                 return False
@@ -527,7 +526,10 @@ class DummyCamera(VideoCamera):
         height: int = 480,
         fps: int = 30,
     ):
-        super().__init__(camera_type=camera_type, width=width, height=height, fps=fps)
+        super().__init__(camera_type=camera_type)
+        self.width = width
+        self.height = height
+        self.fps = fps
 
     def init_camera(self):
         """
@@ -626,11 +628,8 @@ try:
         def __init__(
             self,
             disable: bool = False,
-            width: int = 640,
-            height: int = 480,
-            fps: int = 30,
         ):
-            super().__init__(width, height, fps)
+            super().__init__()
 
             # Configure depth and color streams
             self.pipeline = rs.pipeline()
@@ -651,11 +650,25 @@ try:
             # TODO: When multiple realsense cameras are connected, we need to select the correct one
             time.sleep(0.2)
             self.device_info = realsense_devices.front().get_info(rs.camera_info.name)
-            config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, fps)
-            config.enable_stream(rs.stream.depth, width, height, rs.format.z16, fps)
+            config.enable_stream(
+                stream_type=rs.stream.color,
+                format=rs.format.bgr8,
+            )
+            config.enable_stream(
+                stream_type=rs.stream.depth,
+                format=rs.format.z16,
+            )
             # Start streaming
             self.pipeline.start(config)
             time.sleep(0.2)
+
+            # Get the width, height, and fps of the camera
+            profile = self.pipeline.get_active_profile()
+            stream = profile.get_stream(rs.stream.color)
+            self.width = stream.as_video_stream_profile().width()
+            self.height = stream.as_video_stream_profile().height()
+            self.fps = stream.as_video_stream_profile().fps()
+
             self.is_active = True
 
         @property
