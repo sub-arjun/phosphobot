@@ -20,7 +20,7 @@ def simulation_init():
         p.connect(p.DIRECT)
         p.setGravity(0, 0, -9.81)
 
-        logger.debug("Headless mode enabled")
+        logger.debug("Simulation: headless mode enabled")
 
     elif config.SIM_MODE == "gui":
         # Spin up a new process for the simulation
@@ -36,7 +36,7 @@ def simulation_init():
         # Wait for 1 second to allow the simulation to start
         time.sleep(1)
         p.connect(p.SHARED_MEMORY)
-        logger.debug("GUI mode enabled")
+        logger.debug("Simulation: GUI mode enabled")
 
     else:
         raise ValueError("Invalid simulation mode")
