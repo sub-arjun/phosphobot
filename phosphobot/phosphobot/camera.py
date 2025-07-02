@@ -24,17 +24,6 @@ cameras = None
 MAX_OPENCV_INDEX = 10
 
 
-def cv2VideoCapture(index: int) -> cv2.VideoCapture:
-    """
-    Utility function to create a cv2.VideoCapture object.
-    """
-    # On Windows, add the cv2.CAP_DSHOW flag to avoid errors
-    if platform.system() == "Windows":
-        return cv2.VideoCapture(index, cv2.CAP_DSHOW)
-    else:
-        return cv2.VideoCapture(index)
-
-
 def get_camera_names() -> List[str]:
     """
     This function returns the list of cameras connected to the computer.
@@ -237,7 +226,7 @@ def _find_cameras(
 
     if raise_when_empty and len(camera_ids) == 0:
         raise OSError(
-            f"Not a single camera was detected in {possible_camera_ids}. Try replugging, , rebooting your computer,"
+            f"Not a single camera was detected in {possible_camera_ids}. Try replugging, rebooting your computer,"
             + "reinstalling `opencv2`, reinstalling your camera driver, and ensure your camera is compatible with opencv2."
         )
     elif len(camera_ids) == 0:
@@ -449,9 +438,6 @@ class VideoCamera(threading.Thread, BaseCamera):
     def init_camera(self) -> bool:
         try:
             if self.video.isOpened():
-                self.video.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-                self.video.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-                self.video.set(cv2.CAP_PROP_FPS, self.fps)
                 self.video.set(
                     cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc("M", "J", "P", "G")
                 )
@@ -804,6 +790,7 @@ class AllCameras:
     realsensecamera: Optional[RealSenseCamera] = None
 
     camera_ids: List[int]
+    camera_names: List[str]
     _main_camera: BaseCamera | None = None
     # If it's None, record everything. Otherwise, record only the corresponding cameras
     _cameras_ids_to_record: List[int]
@@ -819,9 +806,18 @@ class AllCameras:
         else:
             self.disabled_cameras = []
 
+        self.detect_cameras()
+
+        # Add atexit hook to stop the cameras
+        atexit.register(self.stop)
+
+    def detect_cameras(self):
+        """
+        Detect all cameras connected to the computer and initialize them.
+        """
         self.video_cameras = []
         self.camera_ids = []
-        self.camera_names: List[str] = []
+        self.camera_names = []
         self._cameras_ids_to_record = []
 
         if not config.ENABLE_CAMERAS:
@@ -923,8 +919,15 @@ class AllCameras:
 
         self._cameras_ids_to_record = self.camera_ids
 
-        # Add atexit hook to stop the cameras
-        atexit.register(self.stop)
+    def refresh(self) -> None:
+        """
+        Refresh the list of cameras.
+        This will reinitialize the cameras and update the camera_ids.
+        """
+        # First, stop all cameras
+        self.stop()
+        # Then, reinitialize the cameras
+        self.detect_cameras()
 
     @property
     def has_connected_camera(self) -> bool:
