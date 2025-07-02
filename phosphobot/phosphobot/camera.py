@@ -611,6 +611,8 @@ class StereoCamera(VideoCamera):
 try:
     import pyrealsense2 as rs  # type: ignore
 
+    REALSENSE_AVAILABLE = True
+
     class RealSenseCamera(BaseCamera):
         """
         A Realsense camera is an Intel camera that can capture depth and RGB frames.
@@ -624,56 +626,129 @@ try:
         pipeline: rs.pipeline
         is_connected: bool = False
         device_info: str
+        device_serial: str
+        device_index: int
 
         def __init__(
             self,
+            device_serial: Optional[str] = None,
+            device_index: Optional[int] = None,
             disable: bool = False,
         ):
             super().__init__()
+
+            self.device_serial = device_serial or "unknown"
+            self.device_index = device_index if device_index is not None else 0
+            self.is_connected = False
+            self.is_active = False
+
+            if disable:
+                logger.debug(f"{self.camera_name} disabled")
+                return
 
             # Configure depth and color streams
             self.pipeline = rs.pipeline()
             config = rs.config()
 
-            # Get the number of realsense devices
+            # Get the RealSense context and devices
             ctx = rs.context()
             realsense_devices = ctx.query_devices()
 
             if realsense_devices.size() == 0:
+                logger.warning("No RealSense devices found")
                 return
+
+            # Find the specific device if serial number is provided
+            target_device = None
+            if device_serial and device_serial != "unknown":
+                for i in range(realsense_devices.size()):
+                    device = realsense_devices[i]
+                    if device.get_info(rs.camera_info.serial_number) == device_serial:
+                        target_device = device
+                        break
+
+                if target_device is None:
+                    logger.error(
+                        f"RealSense device with serial {device_serial} not found"
+                    )
+                    return
+            else:
+                # Use device by index if no serial number provided
+                if self.device_index < realsense_devices.size():
+                    target_device = realsense_devices[self.device_index]
+                    # Update serial number from the actual device
+                    self.device_serial = target_device.get_info(
+                        rs.camera_info.serial_number
+                    )
+                else:
+                    logger.error(
+                        f"RealSense device index {self.device_index} out of range"
+                    )
+                    return
 
             self.is_connected = True
-            if disable:
-                logger.debug(f"{self.camera_name} disabled")
-                return
 
-            # TODO: When multiple realsense cameras are connected, we need to select the correct one
-            time.sleep(0.2)
-            self.device_info = realsense_devices.front().get_info(rs.camera_info.name)
-            config.enable_stream(
-                stream_type=rs.stream.color,
-                format=rs.format.bgr8,
-            )
-            config.enable_stream(
-                stream_type=rs.stream.depth,
-                format=rs.format.z16,
-            )
-            # Start streaming
-            self.pipeline.start(config)
-            time.sleep(0.2)
+            try:
+                # Store device information
+                self.device_info = target_device.get_info(rs.camera_info.name)
 
-            # Get the width, height, and fps of the camera
-            profile = self.pipeline.get_active_profile()
-            stream = profile.get_stream(rs.stream.color)
-            self.width = stream.as_video_stream_profile().width()
-            self.height = stream.as_video_stream_profile().height()
-            self.fps = stream.as_video_stream_profile().fps()
+                # Enable the specific device using its serial number
+                config.enable_device(self.device_serial)
 
-            self.is_active = True
+                # Configure streams
+                config.enable_stream(
+                    stream_type=rs.stream.color,
+                    format=rs.format.bgr8,
+                )
+                config.enable_stream(
+                    stream_type=rs.stream.depth,
+                    format=rs.format.z16,
+                )
+
+                # Add a small delay to ensure device is ready
+                time.sleep(0.3)
+
+                # Start streaming
+                self.pipeline.start(config)
+
+                # Wait a bit more for the pipeline to stabilize
+                time.sleep(0.3)
+
+                # Get the width, height, and fps of the camera
+                profile = self.pipeline.get_active_profile()
+                color_stream = profile.get_stream(rs.stream.color)
+                if color_stream:
+                    video_profile = color_stream.as_video_stream_profile()
+                    self.width = video_profile.width()
+                    self.height = video_profile.height()
+                    self.fps = video_profile.fps()
+                else:
+                    # Set defaults if stream info is not available
+                    self.width = 640
+                    self.height = 480
+                    self.fps = 30
+                    logger.warning(
+                        f"{self.camera_name}: Using default resolution and fps"
+                    )
+
+                self.is_active = True
+                logger.debug(
+                    f"{self.camera_name}: Successfully initialized ({self.width}x{self.height} @ {self.fps}fps)"
+                )
+
+            except Exception as e:
+                logger.error(f"{self.camera_name}: Failed to initialize - {str(e)}")
+                self.is_connected = False
+                self.is_active = False
+                if hasattr(self, "pipeline"):
+                    try:
+                        self.pipeline.stop()
+                    except:  # noqa: E722
+                        pass
 
         @property
         def camera_name(self) -> str:
-            return f"RealsenseCamera {self.camera_type}"
+            return f"RealsenseCamera {self.device_index} ({self.device_serial})"
 
         def get_rgb_frame(
             self, resize: tuple[int, int] | None = None
@@ -788,6 +863,8 @@ except ImportError:
         "phosphobot: pyrealsense2 not available, RealSenseCamera will not be available"
     )
 
+    REALSENSE_AVAILABLE = False
+
     class RealSenseCamera(BaseCamera):  # type: ignore
         def __init__(self, *args, **kwargs):
             raise ImportError("Install pyrealsense2 to add RealSense camera support.")
@@ -800,7 +877,7 @@ except ImportError:
 class AllCameras:
     disabled_cameras: list[int] | None
     video_cameras: List[VideoCamera]
-    realsensecamera: Optional[RealSenseCamera] = None
+    realsense_cameras: List[RealSenseCamera]
 
     camera_ids: List[int]
     camera_names: List[str]
@@ -832,6 +909,7 @@ class AllCameras:
         self.camera_ids = []
         self.camera_names = []
         self._cameras_ids_to_record = []
+        self.realsense_cameras = []
 
         if not config.ENABLE_CAMERAS:
             logger.warning("Cameras are disabled")
@@ -895,40 +973,50 @@ class AllCameras:
             else:
                 logger.debug(f"Ignoring camera {index}: {camera_type}")
 
-        if (
-            self.realsensecamera
-            and self.realsensecamera.is_connected
-            and config.ENABLE_REALSENSE
-        ):
+        # Create virtual cameras for each RealSense device
+        if len(self.realsense_cameras) > 0 and config.ENABLE_REALSENSE:
             # Generate unique camera IDs for virtual cameras
-            max_id = max(self.camera_ids) if self.camera_ids else 0
-            virtual_rgb_id = max_id + 1
-            virtual_depth_id = max_id + 2
+            max_id = max(self.camera_ids) if self.camera_ids else -1
 
-            # Check if virtual cameras are disabled
-            disabled = (
-                self.disabled_cameras if self.disabled_cameras is not None else []
-            )
-            virtual_rgb_disabled = virtual_rgb_id in disabled
-            virtual_depth_disabled = virtual_depth_id in disabled
+            for device_index, realsense_camera in enumerate(self.realsense_cameras):
+                if not realsense_camera.is_connected or not realsense_camera.is_active:
+                    logger.debug(f"Skipping inactive RealSense device {device_index}")
+                    continue
 
-            # Create virtual cameras
-            virtual_rgb = RealSenseVirtualCamera(
-                self.realsensecamera,
-                "rgb",
-                virtual_rgb_id,
-                disable=virtual_rgb_disabled,
-            )
-            virtual_depth = RealSenseVirtualCamera(
-                self.realsensecamera,
-                "depth",
-                virtual_depth_id,
-                disable=virtual_depth_disabled,
-            )
+                # Generate unique IDs for this device's virtual cameras
+                virtual_rgb_id = max_id + 1
+                virtual_depth_id = max_id + 2
+                max_id += 2  # Increment for next device
 
-            # Add to video cameras and camera IDs
-            self.video_cameras.extend([virtual_rgb, virtual_depth])
-            self.camera_ids.extend([virtual_rgb_id, virtual_depth_id])
+                # Check if virtual cameras are disabled
+                disabled = (
+                    self.disabled_cameras if self.disabled_cameras is not None else []
+                )
+                virtual_rgb_disabled = virtual_rgb_id in disabled
+                virtual_depth_disabled = virtual_depth_id in disabled
+
+                # Create virtual cameras for this RealSense device
+                virtual_rgb = RealSenseVirtualCamera(
+                    realsense_camera,
+                    "rgb",
+                    virtual_rgb_id,
+                    disable=virtual_rgb_disabled,
+                )
+                virtual_depth = RealSenseVirtualCamera(
+                    realsense_camera,
+                    "depth",
+                    virtual_depth_id,
+                    disable=virtual_depth_disabled,
+                )
+
+                # Add to video cameras and camera IDs
+                self.video_cameras.extend([virtual_rgb, virtual_depth])
+                self.camera_ids.extend([virtual_rgb_id, virtual_depth_id])
+
+                logger.info(
+                    f"Added virtual cameras for RealSense device {device_index} "
+                    f"(RGB: {virtual_rgb_id}, Depth: {virtual_depth_id})"
+                )
 
         self._cameras_ids_to_record = self.camera_ids
 
@@ -951,37 +1039,84 @@ class AllCameras:
 
     def initialize_realsense_camera(self, max_retries: int = 3) -> None:
         """
-        Initialize RealSense camera with automatic retries on failure.
-        Returns the camera instance if successful, None otherwise.
+        Initialize all available RealSense cameras with automatic retries on failure.
+        Creates a list of RealSenseCamera instances, one for each connected device.
         """
-        self.realsensecamera = None
+        self.realsense_cameras = []
 
-        if not config.ENABLE_REALSENSE:
-            logger.debug("Realsense camera is disabled")
+        if not REALSENSE_AVAILABLE:
+            logger.debug(
+                "pyrealsense2 is not available, RealSense cameras cannot be initialized"
+            )
             return
 
-        for attempt in range(max_retries):
-            try:
-                self.realsensecamera = RealSenseCamera(
-                    disable=self.disabled_cameras is not None
-                    and -1 in self.disabled_cameras
-                )
-                if (
-                    self.realsensecamera is not None
-                    and self.realsensecamera.is_connected
-                ):
-                    logger.info(
-                        f"RealSense camera initialized: {self.realsensecamera.device_info}"
-                    )
-                else:
-                    self.realsensecamera = None
-                return
-            except Exception as e:
-                logger.warning(f"Attempt {attempt + 1}/{max_retries} failed: {str(e)}")
-                if attempt < max_retries - 1:
-                    time.sleep(1)
+        if not config.ENABLE_REALSENSE:
+            logger.debug("Realsense cameras are disabled")
+            return
 
-        logger.info("No RealSense camera detected after all attempts")
+        # Get all available RealSense devices
+        ctx = rs.context()
+        realsense_devices = ctx.query_devices()
+        device_count = realsense_devices.size()
+
+        if device_count == 0:
+            logger.info("No RealSense devices detected")
+            return
+
+        logger.info(f"Found {device_count} RealSense device(s)")
+
+        # Initialize each device
+        for device_index in range(device_count):
+            device = realsense_devices[device_index]
+            device_serial = device.get_info(rs.camera_info.serial_number)
+            device_name = device.get_info(rs.camera_info.name)
+
+            logger.debug(
+                f"Attempting to initialize RealSense device {device_index}: {device_name} (Serial: {device_serial})"
+            )
+
+            # Check if this specific device should be disabled
+            device_disabled = (
+                self.disabled_cameras is not None
+                and -1 in self.disabled_cameras  # All cameras disabled
+            )
+
+            for attempt in range(max_retries):
+                try:
+                    realsense_camera = RealSenseCamera(
+                        device_serial=device_serial,
+                        device_index=device_index,
+                        disable=device_disabled,
+                    )
+
+                    if realsense_camera.is_connected and realsense_camera.is_active:
+                        self.realsense_cameras.append(realsense_camera)
+                        logger.info(
+                            f"RealSense camera {device_index} initialized: {device_name} (Serial: {device_serial})"
+                        )
+                        break
+                    else:
+                        logger.warning(
+                            f"RealSense camera {device_index} failed to connect properly"
+                        )
+
+                except Exception as e:
+                    logger.warning(
+                        f"RealSense device {device_index} attempt {attempt + 1}/{max_retries} failed: {str(e)}"
+                    )
+                    if attempt < max_retries - 1:
+                        time.sleep(1)
+                    else:
+                        logger.error(
+                            f"Failed to initialize RealSense device {device_index} after {max_retries} attempts"
+                        )
+
+        if len(self.realsense_cameras) == 0:
+            logger.info("No RealSense cameras initialized")
+        else:
+            logger.info(
+                f"Successfully initialized {len(self.realsense_cameras)} RealSense camera(s)"
+            )
 
     def status(self) -> AllCamerasStatus:
         """
@@ -1016,8 +1151,8 @@ class AllCameras:
     def stop(self):
         for camera in self.video_cameras:
             camera.stop()
-        if self.realsensecamera:
-            self.realsensecamera.stop()
+        for camera in self.realsense_cameras:
+            camera.stop()
 
     def get_camera_by_id(self, id: int) -> Optional[VideoCamera]:
         if id not in self.camera_ids:
@@ -1030,21 +1165,6 @@ class AllCameras:
 
         logger.warning(f"Camera with id {id} not available in {self.camera_ids}")
         return None
-
-    def get_realsense_camera(self) -> Optional[RealSenseCamera]:
-        if self.realsensecamera is None or not self.realsensecamera.is_active:
-            logger.warning("Realsense camera not available")
-            return None
-        return self.realsensecamera
-
-    def is_stereo(self, camera_id: int) -> bool:
-        """
-        Check if the camera with the given id is a stereo camera.
-        """
-        camera = self.get_camera_by_id(camera_id)
-        if camera is None:
-            return False
-        return camera.camera_type == "stereo"
 
     def get_rgb_frame(
         self,
