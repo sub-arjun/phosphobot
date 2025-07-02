@@ -52,7 +52,7 @@ export default function ViewVideo({ labelText }: { labelText?: string }) {
             <RotateCw
               className={cn("h-4 w-4", isRefreshing && "animate-spin")}
             />
-            Refresh
+            Refresh camera list
           </div>
         </Button>
       </div>
