@@ -152,3 +152,22 @@ async def get_all_camera_frames(
         raise HTTPException(status_code=503, detail="No camera frames available")
 
     return response
+
+
+@router.post(
+    "/cameras/refresh",
+    response_model=dict,
+    description="Refresh the list of available cameras. "
+    + "This operation can take a few seconds as it disconnects and reconnects to all cameras. "
+    + "It is useful when cameras are added or removed while the application is running.",
+)
+async def refresh_camera_list(
+    cameras: AllCameras = Depends(get_all_cameras),
+):
+    """
+    Refresh the list of available cameras.
+    This operation can take a few seconds as it disconnects and reconnects to all cameras.
+    It is useful when cameras are added or removed while the application is running.
+    """
+    cameras.refresh()
+    return {"message": "Camera list refreshed successfully"}
