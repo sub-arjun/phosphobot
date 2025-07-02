@@ -1415,3 +1415,13 @@ def get_all_cameras() -> AllCameras:
         cameras = AllCameras(disabled_cameras=config.DEFAULT_CAMERAS_TO_DISABLE)
 
     return cameras
+
+
+def get_all_cameras_no_init() -> AllCameras | None:
+    """
+    Return the global AllCameras instance without initializing it.
+    This is useful for testing purposes.
+    """
+    global cameras
+
+    return cameras
