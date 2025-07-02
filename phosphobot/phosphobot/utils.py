@@ -989,9 +989,8 @@ async def scan_network_devices(
     try:
         return await fast_arp_scan()
     except PermissionError:
-        logger.warning(
-            "Permission denied for fast scan. Use sudo for faster results.\n"
-            "Falling back to slow scan..."
+        logger.debug(
+            "Permission denied for fast IP scan (use sudo for faster results). Using slow scan..."
         )
         return await slow_arp_scan()
     except Exception as e:

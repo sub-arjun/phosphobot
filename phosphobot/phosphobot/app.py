@@ -14,7 +14,7 @@ from loguru import logger
 from rich import print
 
 from phosphobot import __version__
-from phosphobot.camera import AllCameras, get_all_cameras
+from phosphobot.camera import AllCameras, get_all_cameras_no_init, get_all_cameras
 from phosphobot.configs import config
 from phosphobot.endpoints import (
     auth_router,
@@ -69,7 +69,6 @@ async def lifespan(app: FastAPI):
     # Initialize pybullet simulation
     simulation_init()
     # Initialize cameras
-    cameras = get_all_cameras()
     rcm = get_rcm()
     udp_server = get_udp_server()
 
@@ -85,9 +84,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         udp_server.stop()
-        if cameras:
-            cameras.stop()
-            logger.info("Cameras stopped")
+
         from phosphobot.endpoints.control import (
             ai_control_signal,
             gravity_control,
@@ -103,6 +100,10 @@ async def lifespan(app: FastAPI):
         if leader_follower_control.is_in_loop():
             leader_follower_control.stop()
             logger.info("Leader follower control signal stopped")
+
+        cameras = get_all_cameras_no_init()
+        if cameras:
+            cameras.stop()
 
         # Cleanup the simulation environment
         del rcm
