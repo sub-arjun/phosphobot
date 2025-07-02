@@ -526,10 +526,10 @@ class DummyCamera(VideoCamera):
         height: int = 480,
         fps: int = 30,
     ):
-        super().__init__(camera_type=camera_type)
         self.width = width
         self.height = height
         self.fps = fps
+        super().__init__(camera_type=camera_type)
 
     def init_camera(self):
         """
