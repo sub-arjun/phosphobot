@@ -1044,14 +1044,14 @@ class AllCameras:
         """
         self.realsense_cameras = []
 
+        if not config.ENABLE_REALSENSE:
+            logger.debug("Realsense cameras are disabled")
+            return
+
         if not REALSENSE_AVAILABLE:
             logger.debug(
                 "pyrealsense2 is not available, RealSense cameras cannot be initialized"
             )
-            return
-
-        if not config.ENABLE_REALSENSE:
-            logger.debug("Realsense cameras are disabled")
             return
 
         # Get all available RealSense devices
