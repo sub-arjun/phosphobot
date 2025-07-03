@@ -81,7 +81,6 @@ def step_simulation(steps=960):
     if p.isConnected():
         for _ in range(steps):
             p.stepSimulation()
-        logger.debug("Simulation stepped")
     else:
         logger.warning("Simulation is not connected, cannot step")
 
