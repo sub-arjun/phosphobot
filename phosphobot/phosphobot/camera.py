@@ -451,6 +451,14 @@ class VideoCamera(threading.Thread, BaseCamera):
 
         try:
             if self.video.isOpened():
+                # If on Windows, we need to set the height, width and fps (otherwise it will not work)
+                # We set it to a default 16:9 value
+                # TODO: Make this parameterizable
+                if platform.system() == "Windows":
+                    self.video.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                    self.video.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
+                    self.video.set(cv2.CAP_PROP_FPS, 30)
+
                 self.video.set(
                     cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc("M", "J", "P", "G")
                 )
