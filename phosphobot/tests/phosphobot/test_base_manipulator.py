@@ -18,12 +18,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from phosphobot.configs import config
 from phosphobot.types import SimulationMode
-from phosphobot.hardware import (
-    KochHardware,
-    SO100Hardware,
-    simulation_init,
-    step_simulation,
-)
+from phosphobot.hardware import KochHardware, SO100Hardware, get_sim
 from phosphobot.hardware.base import BaseManipulator
 
 
@@ -35,7 +30,8 @@ def robot(request):
     """
     # Initialize the simulation
     config.SIM_MODE = SimulationMode.headless
-    simulation_init()
+    sim = get_sim()
+    sim.init_simulation()
 
     return request.getfixturevalue(request.param)
 
@@ -69,7 +65,7 @@ async def test_inverse_kinematics(robot: BaseManipulator):
 
     # Move to the initial position
     await robot.move_to_initial_position()
-    step_simulation()
+    robot.sim.step()
 
     position = robot.initial_position
     orientation = robot.initial_orientation_rad

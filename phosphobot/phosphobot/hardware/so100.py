@@ -8,7 +8,6 @@ from serial.tools.list_ports_common import ListPortInfo
 
 from phosphobot.configs import SimulationMode, config
 from phosphobot.control_signal import ControlSignal
-from phosphobot.hardware import step_simulation, inverse_dynamics, set_joint_state
 from phosphobot.hardware.base import BaseManipulator
 from phosphobot.hardware.motors.feetech import FeetechMotorsBus  # type: ignore
 from phosphobot.utils import get_resources_path
@@ -519,14 +518,14 @@ class SO100Hardware(BaseManipulator):
 
             # Update PyBullet simulation for gravity calculation
             for i, idx in enumerate(joint_indices):
-                set_joint_state(self.p_robot_id, idx, pos_rad[i])
-            step_simulation()
+                self.sim.set_joint_state(self.p_robot_id, idx, pos_rad[i])
+            self.sim.step()
 
             # Calculate gravity compensation torque
             positions = list(pos_rad)
             velocities = [0.0] * num_joints
             accelerations = [0.0] * num_joints
-            tau_g = inverse_dynamics(
+            tau_g = self.sim.inverse_dynamics(
                 self.p_robot_id,
                 positions,
                 velocities,

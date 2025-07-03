@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from phosphobot.hardware import step_simulation
+from phosphobot.hardware import get_sim
 from phosphobot.hardware.base import BaseManipulator
 
 
@@ -47,7 +47,7 @@ async def move_robot_testing(
     robot.set_simulation_positions(np.zeros(6))
 
     # This steps the simulation to update the robot's position
-    step_simulation()
+    robot.sim.step()
 
     # Calculate the start position
     start_position, start_orientation = robot.forward_kinematics()
@@ -61,7 +61,7 @@ async def move_robot_testing(
         target_orientation_rad=theoretical_rotation,
     )
 
-    step_simulation()
+    robot.sim.step()
 
     updated_position, updated_rotation = robot.forward_kinematics()
 

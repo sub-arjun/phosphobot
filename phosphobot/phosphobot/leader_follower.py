@@ -6,12 +6,7 @@ import numpy as np
 from loguru import logger
 
 from phosphobot.control_signal import ControlSignal
-from phosphobot.hardware import (
-    SO100Hardware,
-    RemotePhosphobot,
-    set_joint_state,
-    inverse_dynamics,
-)
+from phosphobot.hardware import SO100Hardware, RemotePhosphobot, get_sim
 
 
 @dataclass
@@ -26,6 +21,7 @@ async def leader_follower_loop(
     invert_controls: bool,
     enable_gravity_compensation: bool,
     compensation_values: dict[str, int] | None,
+    sim=get_sim(),
 ):
     """
     Background task that implements leader-follower control:
@@ -153,12 +149,12 @@ async def leader_follower_loop(
                 # Calculate gravity compensation torque
                 # Update PyBullet simulation for gravity calculation
                 for i, idx in enumerate(joint_indices):
-                    set_joint_state(leader.p_robot_id, idx, pos_rad[i])
+                    sim.set_joint_state(leader.p_robot_id, idx, pos_rad[i])
 
                 positions = list(pos_rad)
                 velocities = [0.0] * num_joints
                 accelerations = [0.0] * num_joints
-                tau_g = inverse_dynamics(
+                tau_g = sim.inverse_dynamics(
                     leader.p_robot_id,
                     positions=positions,
                     velocities=velocities,

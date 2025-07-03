@@ -11,19 +11,7 @@ from loguru import logger
 from phosphobot.configs import config as cfg
 from phosphobot.models import BaseRobot, BaseRobotConfig, BaseRobotInfo
 from phosphobot.models.lerobot_dataset import FeatureDetails
-from phosphobot.hardware import (
-    step_simulation,
-    reset_simulation,
-    load_URDF,
-    set_joints_states,
-    get_joint_state,
-    inverse_kinematics,
-    get_joint_info,
-    get_link_state,
-    add_debug_text,
-    add_debug_points,
-    add_debug_lines,
-)
+from phosphobot.hardware import get_sim
 from scipy.spatial.transform import Rotation as R  # type: ignore
 from phosphobot.utils import (
     euler_from_quaternion,
@@ -188,7 +176,7 @@ class BaseManipulator(BaseRobot):
         reset_simulation_bool: bool = False,
         axis: List[float] | None = None,
         add_debug_lines: bool = False,
-        show_debug_link_indices: bool = True,
+        show_debug_link_indices: bool = False,
         **kwargs: Optional[dict[str, str]],
     ):
         """
@@ -222,15 +210,17 @@ class BaseManipulator(BaseRobot):
 
         self._add_debug_lines = add_debug_lines
 
+        self.sim = get_sim()
+
         if reset_simulation_bool:
-            reset_simulation()
+            self.sim.reset()
 
         logger.info(f"Loading URDF file: {self.URDF_FILE_PATH}")
         if not os.path.exists(self.URDF_FILE_PATH):
             raise FileNotFoundError(
                 f"URDF file not found: {self.URDF_FILE_PATH}\nCurrent path: {os.getcwd()}"
             )
-        self.p_robot_id, num_joints, actuated_joints = load_URDF(
+        self.p_robot_id, num_joints, actuated_joints = self.sim.load_urdf(
             urdf_path=self.URDF_FILE_PATH,
             axis=axis,
             axis_orientation=self.AXIS_ORIENTATION,
@@ -239,7 +229,7 @@ class BaseManipulator(BaseRobot):
 
         self.actuated_joints = actuated_joints
 
-        set_joints_states(
+        self.sim.set_joints_states(
             robot_id=self.p_robot_id,
             joint_indices=self.actuated_joints,
             target_positions=self.CALIBRATION_POSITION,
@@ -248,7 +238,7 @@ class BaseManipulator(BaseRobot):
         # Display link indices
         if show_debug_link_indices:
             for i in range(20):
-                link = get_link_state(
+                link = self.sim.get_link_state(
                     robot_id=self.p_robot_id,
                     link_index=i,
                 )
@@ -257,7 +247,7 @@ class BaseManipulator(BaseRobot):
                 logger.debug(
                     f"[{self.name}] Link {i}: position {link[0]} orientation {link[1]}"
                 )
-                add_debug_text(
+                self.sim.add_debug_text(
                     text=f"{i}",
                     text_position=link[0],
                     text_color_RGB=[1, 0, 0],
@@ -268,12 +258,14 @@ class BaseManipulator(BaseRobot):
         # Gripper motor is the last one :
         self.gripper_servo_id = self.SERVO_IDS[-1]
 
-        joint_infos = [get_joint_info(self.p_robot_id, i) for i in range(num_joints)]
+        joint_infos = [
+            self.sim.get_joint_info(self.p_robot_id, i) for i in range(num_joints)
+        ]
 
         self.lower_joint_limits = [info[8] for info in joint_infos]
         self.upper_joint_limits = [info[9] for info in joint_infos]
 
-        self.gripper_initial_angle = get_joint_state(
+        self.gripper_initial_angle = self.sim.get_joint_state(
             robot_id=self.p_robot_id,
             joint_index=self.END_EFFECTOR_LINK_INDEX,
         )[0]
@@ -359,7 +351,7 @@ class BaseManipulator(BaseRobot):
 
         # If the robot is not connected, we use the pybullet simulation
         # Joint torque is in the 4th element of the joint state tuple
-        current_gripper_torque = get_joint_state(
+        current_gripper_torque = self.sim.get_joint_state(
             robot_id=self.p_robot_id,
             joint_index=self.END_EFFECTOR_LINK_INDEX,
         )[3]
@@ -473,7 +465,7 @@ class BaseManipulator(BaseRobot):
             # In Koch 1.1, the gripper_opening joint in the URDF file is set to -1.74 ; 1.74 even tough it's
             # actually the yaw join link is supposed to have these limits.
             # You need to keep this otherwise the inverse kinematics will not work.
-            target_q_rad = inverse_kinematics(
+            target_q_rad = self.sim.inverse_kinematics(
                 robot_id=self.p_robot_id,
                 end_effector_link_index=self.END_EFFECTOR_LINK_INDEX,
                 target_position=target_position_cartesian,
@@ -491,7 +483,7 @@ class BaseManipulator(BaseRobot):
             )
         elif self.name == "wx-250s":
             # More joints means longer IK to find the right position
-            target_q_rad = inverse_kinematics(
+            target_q_rad = self.sim.inverse_kinematics(
                 robot_id=self.p_robot_id,
                 end_effector_link_index=self.END_EFFECTOR_LINK_INDEX,
                 target_position=target_position_cartesian,
@@ -513,7 +505,7 @@ class BaseManipulator(BaseRobot):
             # the robot moves more freely without the limits.
             # Let this be a lesson #ThierryBreton
 
-            target_q_rad = inverse_kinematics(
+            target_q_rad = self.sim.inverse_kinematics(
                 robot_id=self.p_robot_id,
                 end_effector_link_index=self.END_EFFECTOR_LINK_INDEX,
                 target_position=target_position_cartesian,
@@ -548,16 +540,16 @@ class BaseManipulator(BaseRobot):
             current_motor_positions = self.read_joints_position(
                 unit="rad", source="robot"
             )
-            set_joints_states(
+            self.sim.set_joints_states(
                 robot_id=self.p_robot_id,
                 joint_indices=self.actuated_joints,
                 target_positions=current_motor_positions.tolist(),
             )
             # Update the simulation
-            step_simulation()
+            self.sim.step()
 
         # Get the link state of the end effector
-        end_effector_link_state = get_link_state(
+        end_effector_link_state = self.sim.get_link_state(
             robot_id=self.p_robot_id,
             link_index=self.END_EFFECTOR_LINK_INDEX,
             compute_forward_kinematics=True,
@@ -643,7 +635,7 @@ class BaseManipulator(BaseRobot):
             current_position_rad = np.zeros(len(joints_ids))
 
             for idx, joint_id in enumerate(joints_ids):
-                current_position_rad[idx] = get_joint_state(
+                current_position_rad[idx] = self.sim.get_joint_state(
                     robot_id=self.p_robot_id,
                     joint_index=joint_id,
                 )[0]
@@ -717,13 +709,13 @@ class BaseManipulator(BaseRobot):
             joint_indices = self.actuated_joints
             target_positions = q_target_rad.tolist()
 
-        set_joints_states(
+        self.sim.set_joints_states(
             robot_id=self.p_robot_id,
             joint_indices=joint_indices,
             target_positions=target_positions,
         )
         # Update the simulation
-        step_simulation()
+        self.sim.step()
 
     def read_gripper_command(self) -> float:
         """
@@ -850,7 +842,7 @@ class BaseManipulator(BaseRobot):
 
         if self._add_debug_lines:
             # Print debug point in pybullet
-            add_debug_points(
+            self.sim.add_debug_points(
                 point_positions=[target_position],
                 point_colors_RGB=[1, 0, 0],
                 point_size=4,
@@ -870,7 +862,7 @@ class BaseManipulator(BaseRobot):
             delta = 0.02
             # Compute the end point
             end_point = target_position + delta * direction_vector
-            add_debug_lines(
+            self.sim.add_debug_lines(
                 line_from_XYZ=start_point.tolist(),
                 line_to_XYZ=end_point.tolist(),
                 line_color_RGB=[[0, 1, 0]],
@@ -905,13 +897,13 @@ class BaseManipulator(BaseRobot):
         """
         Move robot joints to the specified positions in the simulation.
         """
-        set_joints_states(
+        self.sim.set_joints_states(
             robot_id=self.p_robot_id,
             joint_indices=self.actuated_joints,
             target_positions=joints,
         )
         # Update the simulation
-        step_simulation()
+        self.sim.step()
 
     async def calibrate(self) -> tuple[Literal["success", "in_progress", "error"], str]:
         raise NotImplementedError(
@@ -1008,7 +1000,7 @@ class BaseManipulator(BaseRobot):
 
         # Update simulation only if the object has not been gripped:
         if not self.is_object_gripped:
-            set_joints_states(
+            self.sim.set_joints_states(
                 robot_id=self.p_robot_id,
                 joint_indices=[self.GRIPPER_JOINT_INDEX],
                 target_positions=[
@@ -1067,13 +1059,13 @@ class BaseManipulator(BaseRobot):
         # Update simulation
         # this take into account the leader that has less joints
         logger.debug(f"Moving to position: {joints_position}")
-        set_joints_states(
+        self.sim.set_joints_states(
             robot_id=self.p_robot_id,
             joint_indices=self.actuated_joints,
             target_positions=joints_position,
         )
         # Update the simulation
-        step_simulation()
+        self.sim.step()
         self.control_gripper(gripper_command)
 
     def get_info_for_dataset(self) -> BaseRobotInfo:
@@ -1160,7 +1152,7 @@ class BaseManipulator(BaseRobot):
         # Retrieve joint angles using getJointStates
         for idx, joint_id in enumerate(self.actuated_joints):
             # Joint torque is in the 4th element of the joint state tuple
-            current_torque[idx] = get_joint_state(
+            current_torque[idx] = self.sim.get_joint_state(
                 robot_id=self.p_robot_id,
                 joint_index=joint_id,
             )[3]

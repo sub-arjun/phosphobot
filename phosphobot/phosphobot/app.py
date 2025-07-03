@@ -26,7 +26,7 @@ from phosphobot.endpoints import (
     training_router,
     update_router,
 )
-from phosphobot.hardware import simulation_init, simulation_stop
+from phosphobot.hardware import get_sim
 from phosphobot.models import ServerStatus
 from phosphobot.posthog import posthog, posthog_pageview
 from phosphobot.recorder import Recorder, get_recorder
@@ -66,11 +66,12 @@ def get_local_ip() -> str:
 async def lifespan(app: FastAPI):
     # Initialize telemetry
     init_telemetry()
-    # Initialize pybullet simulation
-    simulation_init()
     # Initialize cameras
     rcm = get_rcm()
     udp_server = get_udp_server()
+    # Initialize pybullet simulation
+    sim = get_sim()
+    sim.init_simulation()
 
     try:
         login_to_hf()
@@ -107,7 +108,7 @@ async def lifespan(app: FastAPI):
 
         # Cleanup the simulation environment
         del rcm
-        simulation_stop()
+        del sim
         sentry_sdk.flush(timeout=1)
         posthog.shutdown()
 
