@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
+from phosphobot.hardware import step_simulation
 from phosphobot.hardware.base import BaseManipulator
-from phosphobot.utils import step_simulation
 
 
 def compare_angles_radian(

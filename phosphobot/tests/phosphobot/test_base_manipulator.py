@@ -12,14 +12,18 @@ import sys
 import numpy as np
 import pytest
 from loguru import logger
-from phosphobot.utils import step_simulation
 from utils import move_robot_testing
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from phosphobot.configs import config
 from phosphobot.types import SimulationMode
-from phosphobot.hardware import KochHardware, SO100Hardware, simulation_init
+from phosphobot.hardware import (
+    KochHardware,
+    SO100Hardware,
+    simulation_init,
+    step_simulation,
+)
 from phosphobot.hardware.base import BaseManipulator
 
 

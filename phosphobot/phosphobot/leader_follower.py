@@ -3,11 +3,15 @@ import time
 from dataclasses import dataclass
 
 import numpy as np
-import pybullet as p
 from loguru import logger
 
 from phosphobot.control_signal import ControlSignal
-from phosphobot.hardware import SO100Hardware, RemotePhosphobot
+from phosphobot.hardware import (
+    SO100Hardware,
+    RemotePhosphobot,
+    set_joint_state,
+    inverse_dynamics,
+)
 
 
 @dataclass
@@ -69,12 +73,12 @@ async def leader_follower_loop(
                 )
                 await asyncio.sleep(0.05)
         else:
-            assert isinstance(
-                leader, SO100Hardware
-            ), "Gravity compensation is only supported for SO100Hardware."
-            assert isinstance(
-                follower, SO100Hardware
-            ), "Gravity compensation is only supported for SO100Hardware."
+            assert isinstance(leader, SO100Hardware), (
+                "Gravity compensation is only supported for SO100Hardware."
+            )
+            assert isinstance(follower, SO100Hardware), (
+                "Gravity compensation is only supported for SO100Hardware."
+            )
             leader_current_voltage = leader.current_voltage()
             if (
                 leader_current_voltage is None
@@ -140,25 +144,25 @@ async def leader_follower_loop(
                     pos_rad[0] = -pos_rad[0]
                 follower.write_joint_positions(list(pos_rad), unit="rad")
             else:
-                assert isinstance(
-                    leader, SO100Hardware
-                ), "Gravity compensation is only supported for SO100Hardware."
-                assert isinstance(
-                    follower, SO100Hardware
-                ), "Gravity compensation is only supported for SO100Hardware."
+                assert isinstance(leader, SO100Hardware), (
+                    "Gravity compensation is only supported for SO100Hardware."
+                )
+                assert isinstance(follower, SO100Hardware), (
+                    "Gravity compensation is only supported for SO100Hardware."
+                )
                 # Calculate gravity compensation torque
                 # Update PyBullet simulation for gravity calculation
                 for i, idx in enumerate(joint_indices):
-                    p.resetJointState(leader.p_robot_id, idx, pos_rad[i])
+                    set_joint_state(leader.p_robot_id, idx, pos_rad[i])
 
                 positions = list(pos_rad)
                 velocities = [0.0] * num_joints
                 accelerations = [0.0] * num_joints
-                tau_g = p.calculateInverseDynamics(
+                tau_g = inverse_dynamics(
                     leader.p_robot_id,
-                    positions,
-                    velocities,
-                    accelerations,
+                    positions=positions,
+                    velocities=velocities,
+                    accelerations=accelerations,
                 )
                 tau_g = list(tau_g)
 

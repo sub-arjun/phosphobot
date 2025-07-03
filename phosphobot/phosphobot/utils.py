@@ -53,21 +53,6 @@ def is_running_on_linux() -> bool:
     return os.name == "posix"
 
 
-def step_simulation(steps=960):
-    """
-    When running the simulation in headless mode,
-    Pybullet forces us to step the simulation manually.
-
-    The sim runs at 240 Hz, so we need to step it 240 times per second.
-    """
-    import pybullet as p  # type: ignore
-
-    # When running the simulation in headless mode,
-    # Pybullet forces us to step the simulation manually
-    for _ in range(steps):
-        p.stepSimulation()
-
-
 def euler_from_quaternion(quaternion: np.ndarray, degrees: bool) -> np.ndarray:
     """
     Convert a quaternion into euler angles (roll, pitch, yaw)

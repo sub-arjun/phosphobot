@@ -12,11 +12,17 @@ from loguru import logger
 from phosphobot.configs import config as cfg
 from phosphobot.models import BaseRobot, BaseRobotConfig, BaseRobotInfo
 from phosphobot.models.lerobot_dataset import FeatureDetails
+from phosphobot.hardware import (
+    step_simulation,
+    reset_simulation,
+    loadURDF,
+    set_joints_states,
+    get_joint_state,
+)
 from scipy.spatial.transform import Rotation as R  # type: ignore
 from phosphobot.utils import (
     euler_from_quaternion,
     get_resources_path,
-    step_simulation,
 )
 
 
@@ -174,7 +180,7 @@ class BaseManipulator(BaseRobot):
         device_name: str | None = None,
         serial_id: str | None = None,
         only_simulation: bool = False,
-        reset_simulation: bool = False,
+        reset_simulation_bool: bool = False,
         axis: List[float] | None = None,
         add_debug_lines: bool = False,
         show_debug_link_indices: bool = True,
@@ -194,9 +200,9 @@ class BaseManipulator(BaseRobot):
 
         # When creating a new robot, you should add default values for these
         # These values depends on the hardware
-        assert (
-            self.CALIBRATION_POSITION is not None
-        ), "CALIBRATION_POSITION must be defined in the class"
+        assert self.CALIBRATION_POSITION is not None, (
+            "CALIBRATION_POSITION must be defined in the class"
+        )
         assert self.RESOLUTION is not None, "RESOLUTION must be defined in the class"
         assert self.SERVO_IDS is not None, "SERVO_IDS must be defined in the class"
 
@@ -211,19 +217,19 @@ class BaseManipulator(BaseRobot):
 
         self._add_debug_lines = add_debug_lines
 
-        if reset_simulation:
-            p.resetSimulation()
+        if reset_simulation_bool:
+            reset_simulation()
 
         logger.info(f"Loading URDF file: {self.URDF_FILE_PATH}")
         if not os.path.exists(self.URDF_FILE_PATH):
             raise FileNotFoundError(
                 f"URDF file not found: {self.URDF_FILE_PATH}\nCurrent path: {os.getcwd()}"
             )
-        self.p_robot_id = p.loadURDF(
-            self.URDF_FILE_PATH,
-            axis,
-            self.AXIS_ORIENTATION,
-            useFixedBase=True,
+        self.p_robot_id = loadURDF(
+            urdf_path=self.URDF_FILE_PATH,
+            axis=axis,
+            axis_orientation=self.AXIS_ORIENTATION,
+            use_fixed_base=True,
             flags=p.URDF_MAINTAIN_LINK_ORDER,
         )
 
@@ -232,25 +238,16 @@ class BaseManipulator(BaseRobot):
         for i in range(p.getNumJoints(self.p_robot_id)):
             joint_info = p.getJointInfo(self.p_robot_id, i)
             joint_type = joint_info[2]
-            # type_to_label = {
-            #     p.JOINT_REVOLUTE: "revolute",
-            #     p.JOINT_PRISMATIC: "prismatic",
-            #     p.JOINT_SPHERICAL: "spherical",
-            #     p.JOINT_FIXED: "fixed",
-            # }
-            # logger.debug(
-            #     f"[{self.name}] Joint {i} index {joint_info[0]}: {joint_info[1]} - {type_to_label[joint_type]} - {joint_info[8]} - {joint_info[9]}"
-            # )
+
             # Consider only revolute joints
             if joint_type in [p.JOINT_REVOLUTE]:
                 actuated_joints.append(i)
         self.actuated_joints = actuated_joints
 
-        # Set the motors to postion
-        p.setJointMotorControlArray(
-            self.p_robot_id,
-            self.actuated_joints,
-            p.POSITION_CONTROL,
+        set_joints_states(
+            robot_id=self.p_robot_id,
+            joint_indices=self.actuated_joints,
+            target_positions=self.CALIBRATION_POSITION,
         )
 
         # Display link indices
@@ -281,9 +278,9 @@ class BaseManipulator(BaseRobot):
         self.lower_joint_limits = [info[8] for info in joint_infos]
         self.upper_joint_limits = [info[9] for info in joint_infos]
 
-        self.gripper_initial_angle = p.getJointState(
-            bodyUniqueId=self.p_robot_id,
-            jointIndex=self.END_EFFECTOR_LINK_INDEX,
+        self.gripper_initial_angle = get_joint_state(
+            robot_id=self.p_robot_id,
+            joint_index=self.END_EFFECTOR_LINK_INDEX,
         )[0]
 
         if not only_simulation:
@@ -366,13 +363,11 @@ class BaseManipulator(BaseRobot):
             return current_gripper_torque
 
         # If the robot is not connected, we use the pybullet simulation
-        # Retrieve joint angles using getJointStates
-        joint_state: list = p.getJointState(
-            bodyUniqueId=self.p_robot_id,
-            jointIndex=self.END_EFFECTOR_LINK_INDEX,
-        )
         # Joint torque is in the 4th element of the joint state tuple
-        current_gripper_torque = joint_state[3]
+        current_gripper_torque: list = get_joint_state(
+            robot_id=self.p_robot_id,
+            joint_index=self.END_EFFECTOR_LINK_INDEX,
+        )[3]
         if not isinstance(current_gripper_torque, float):
             logger.warning("None torque value for gripper motor ")
             current_gripper_torque = np.int32(0)
@@ -559,11 +554,10 @@ class BaseManipulator(BaseRobot):
             current_motor_positions = self.read_joints_position(
                 unit="rad", source="robot"
             )
-            p.setJointMotorControlArray(
-                bodyIndex=self.p_robot_id,
-                jointIndices=self.actuated_joints,
-                targetPositions=current_motor_positions.tolist(),
-                controlMode=p.POSITION_CONTROL,
+            set_joints_states(
+                robot_id=self.p_robot_id,
+                joint_indices=self.actuated_joints,
+                target_positions=current_motor_positions.tolist(),
             )
             # Update the simulation
             step_simulation()
@@ -655,11 +649,10 @@ class BaseManipulator(BaseRobot):
             current_position_rad = np.zeros(len(joints_ids))
 
             for idx, joint_id in enumerate(joints_ids):
-                joint_state = p.getJointState(
-                    bodyUniqueId=self.p_robot_id,
-                    jointIndex=joint_id,
-                )
-                current_position_rad[idx] = joint_state[0]  # in radians
+                current_position_rad[idx] = get_joint_state(
+                    robot_id=self.p_robot_id,
+                    joint_index=joint_id,
+                )[0]
             source_unit = "rad"
             output_position = current_position_rad
 
@@ -730,11 +723,10 @@ class BaseManipulator(BaseRobot):
             joint_indices = self.actuated_joints
             target_positions = q_target_rad.tolist()
 
-        p.setJointMotorControlArray(
-            bodyIndex=self.p_robot_id,
-            jointIndices=joint_indices,
-            targetPositions=target_positions,
-            controlMode=p.POSITION_CONTROL,
+        set_joints_states(
+            robot_id=self.p_robot_id,
+            joint_indices=joint_indices,
+            target_positions=target_positions,
         )
         # Update the simulation
         step_simulation()
@@ -893,9 +885,10 @@ class BaseManipulator(BaseRobot):
             )
 
         if target_orientation_rad is not None:
-            target_orientation_quaternion = np.array(
-                p.getQuaternionFromEuler(target_orientation_rad)
-            )
+            # Create rotation object from Euler angles
+            r = R.from_euler("xyz", target_orientation_rad)
+            # Get quaternion [x, y, z, w]
+            target_orientation_quaternion = r.as_quat()
         else:
             target_orientation_quaternion = None
 
@@ -918,12 +911,10 @@ class BaseManipulator(BaseRobot):
         """
         Move robot joints to the specified positions in the simulation.
         """
-
-        p.setJointMotorControlArray(
-            bodyIndex=self.p_robot_id,
-            jointIndices=self.actuated_joints,
-            controlMode=p.POSITION_CONTROL,
-            targetPositions=joints,
+        set_joints_states(
+            robot_id=self.p_robot_id,
+            joint_indices=self.actuated_joints,
+            target_positions=joints,
         )
         # Update the simulation
         step_simulation()
@@ -1081,11 +1072,10 @@ class BaseManipulator(BaseRobot):
         # Update simulation
         # this take into account the leader that has less joints
         logger.debug(f"Moving to position: {joints_position}")
-        p.setJointMotorControlArray(
-            bodyIndex=self.p_robot_id,
-            jointIndices=self.actuated_joints,
-            controlMode=p.POSITION_CONTROL,
-            targetPositions=joints_position,
+        set_joints_states(
+            robot_id=self.p_robot_id,
+            joint_indices=self.actuated_joints,
+            target_positions=joints_position,
         )
         # Update the simulation
         step_simulation()
@@ -1174,12 +1164,11 @@ class BaseManipulator(BaseRobot):
         # If the robot is not connected, we use the pybullet simulation
         # Retrieve joint angles using getJointStates
         for idx, joint_id in enumerate(self.actuated_joints):
-            joint_state = p.getJointState(
-                bodyUniqueId=self.p_robot_id,
-                jointIndex=idx,
-            )
             # Joint torque is in the 4th element of the joint state tuple
-            current_torque[idx] = joint_state[3]
+            current_torque[idx] = get_joint_state(
+                robot_id=self.p_robot_id,
+                joint_index=joint_id,
+            )[3]
 
         return current_torque
 

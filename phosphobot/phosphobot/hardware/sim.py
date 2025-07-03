@@ -55,3 +55,182 @@ def simulation_stop():
     if config.SIM_MODE == "gui":
         # Kill the simulation process: any instance of python 3.8
         subprocess.run(["pkill", "-f", "python3.8"])
+
+
+def reset_simulation():
+    """
+    Reset the simulation environment.
+    """
+    if p.isConnected():
+        p.resetSimulation()
+        logger.info("Simulation reset")
+    else:
+        logger.warning("Simulation is not connected, cannot reset")
+
+
+def step_simulation(steps=960):
+    """
+    Step the simulation environment.
+    """
+    if p.isConnected():
+        for _ in range(steps):
+            p.stepSimulation()
+        logger.debug("Simulation stepped")
+    else:
+        logger.warning("Simulation is not connected, cannot step")
+
+
+def set_joint_state(robot_id, joint_id: int, joint_position: float):
+    """
+    Set the joint state of a robot in the simulation.
+
+    Args:
+        robot_id (int): The ID of the robot in the simulation.
+        joint_id (int): The ID of the joint to set.
+        joint_position (float): The position to set the joint to.
+    """
+    if p.isConnected():
+        p.resetJointState(robot_id, joint_id, joint_position)
+    else:
+        logger.warning("Simulation is not connected, cannot set joint state")
+
+
+def inverse_dynamics(
+    robot_id,
+    positions: list,
+    velocities: list,
+    accelerations: list,
+):
+    """
+    Perform inverse kinematics to compute joint angles from end-effector pose.
+    """
+    if p.isConnected():
+        # Call the PyBullet inverse kinematics function
+        joint_angles = p.calculateInverseDynamics(
+            robot_id, positions, velocities, accelerations
+        )
+        return joint_angles
+    else:
+        logger.warning("Simulation is not connected, cannot perform inverse kinematics")
+        return None
+
+
+def loadURDF(
+    urdf_path: str,
+    axis: list[float] | None,
+    axis_orientation: list[int],
+    use_fixed_base: bool,
+    flags,
+):
+    """
+    Load a URDF file into the simulation.
+
+    Args:
+        urdf_path (str): The path to the URDF file.
+        axis (list[float] | None): The axis of the robot.
+        axis_orientation (list[int]): The orientation of the robot.
+        use_fixed_base (bool): Whether to use a fixed base for the robot.
+        flags: Additional flags for loading the URDF.
+
+    Returns:
+        int: The ID of the loaded robot in the simulation.
+    """
+    if p.isConnected():
+        return p.loadURDF(
+            urdf_path,
+            basePosition=axis,
+            baseOrientation=axis_orientation,
+            useFixedBase=use_fixed_base,
+            flags=flags,
+        )
+    else:
+        logger.warning("Simulation is not connected, cannot load URDF")
+        return None
+
+
+def set_joints_states(robot_id, joint_indices, target_positions):
+    """
+    Set multiple joint states of a robot in the simulation.
+
+    Args:
+        robot_id (int): The ID of the robot in the simulation.
+        joint_indices (list[int]): The indices of the joints to set.
+        target_positions (list[float]): The positions to set the joints to.
+    """
+    if p.isConnected():
+        p.setJointMotorControlArray(
+            bodyIndex=robot_id,
+            jointIndices=joint_indices,
+            controlMode=p.POSITION_CONTROL,
+            targetPositions=target_positions,
+        )
+    else:
+        logger.warning("Simulation is not connected, cannot set joint states")
+
+
+def get_joint_state(robot_id, joint_index: int) -> list:
+    """
+    Get the state of a joint in the simulation.
+
+    Args:
+        robot_id (int): The ID of the robot in the simulation.
+        joint_index (int): The index of the joint to get.
+
+    Returns:
+        list: pybullet list describing the joit state.
+    """
+    if p.isConnected():
+        joint_state = p.getJointState(robot_id, joint_index)
+        return joint_state
+    else:
+        logger.warning("Simulation is not connected, cannot get joint state")
+        return []
+
+
+def inverse_kinematics(
+    robot_id,
+    end_effector_link_index: int,
+    target_position: list,
+    target_orientation: list,
+    jointDamping: list | None = None,
+    lowerLimits: list | None = None,
+    upperLimits: list | None = None,
+    jointRanges: list | None = None,
+    maxNumIterations: int = 200,
+    residualThreshold: float = 1e-6,
+) -> list:
+    """
+    Perform inverse kinematics to compute joint angles from end-effector pose.
+
+    Args:
+        robot_id (int): The ID of the robot in the simulation.
+        end_effector_link_index (int): The index of the end-effector link.
+        target_position (list): The target position for the end-effector.
+        target_orientation (list): The target orientation for the end-effector.
+        jointDamping (list, optional): Damping for each joint.
+        lowerLimits (list, optional): Lower limits for each joint.
+        upperLimits (list, optional): Upper limits for each joint.
+        jointRanges (list, optional): Joint ranges for each joint.
+        maxNumIterations (int, optional): Maximum number of iterations for IK solver.
+        residualThreshold (float, optional): Residual threshold for IK solver.
+
+    Returns:
+        list: Joint angles computed by inverse kinematics.
+    """
+    if p.isConnected():
+        return p.calculateInverseKinematics(
+            robot_id,
+            end_effector_link_index,
+            targetPosition=target_position,
+            targetOrientation=target_orientation,
+            solver=p.IK_SDLS,
+            restPoses=[0] * len(target_position),  # Assuming rest poses are zero
+            lowerLimits=lowerLimits,
+            upperLimits=upperLimits,
+            jointRanges=jointRanges,
+            maxNumIterations=maxNumIterations,
+            residualThreshold=residualThreshold,
+        )
+    else:
+        logger.warning("Simulation is not connected, cannot perform inverse kinematics")
+        return []
