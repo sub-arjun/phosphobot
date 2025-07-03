@@ -871,8 +871,8 @@ class BaseManipulator(BaseRobot):
             # Compute the end point
             end_point = target_position + delta * direction_vector
             add_debug_lines(
-                line_from_XYZ=start_point,
-                line_to_XYZ=end_point,
+                line_from_XYZ=start_point.tolist(),
+                line_to_XYZ=end_point.tolist(),
                 line_color_RGB=[[0, 1, 0]],
                 line_width=2,
                 life_time=3,
