@@ -14,7 +14,7 @@ from phosphobot.models.lerobot_dataset import FeatureDetails
 from phosphobot.hardware import (
     step_simulation,
     reset_simulation,
-    loadURDF,
+    load_URDF,
     set_joints_states,
     get_joint_state,
     inverse_kinematics,
@@ -230,7 +230,7 @@ class BaseManipulator(BaseRobot):
             raise FileNotFoundError(
                 f"URDF file not found: {self.URDF_FILE_PATH}\nCurrent path: {os.getcwd()}"
             )
-        self.p_robot_id, num_joints, actuated_joints = loadURDF(
+        self.p_robot_id, num_joints, actuated_joints = load_URDF(
             urdf_path=self.URDF_FILE_PATH,
             axis=axis,
             axis_orientation=self.AXIS_ORIENTATION,
@@ -478,16 +478,16 @@ class BaseManipulator(BaseRobot):
                 end_effector_link_index=self.END_EFFECTOR_LINK_INDEX,
                 target_position=target_position_cartesian,
                 target_orientation=target_orientation_quaternions,
-                restPoses=[0] * len(self.lower_joint_limits),
-                jointDamping=None,
-                lowerLimits=self.lower_joint_limits,
-                upperLimits=self.upper_joint_limits,
-                jointRanges=[
+                rest_poses=[0] * len(self.lower_joint_limits),
+                joint_damping=None,
+                lower_limits=self.lower_joint_limits,
+                upper_limits=self.upper_joint_limits,
+                joint_ranges=[
                     abs(up - low)
                     for up, low in zip(self.upper_joint_limits, self.lower_joint_limits)
                 ],
-                maxNumIterations=50,
-                residualThreshold=1e-9,
+                max_num_iterations=50,
+                residual_threshold=1e-9,
             )
         elif self.name == "wx-250s":
             # More joints means longer IK to find the right position
@@ -496,15 +496,15 @@ class BaseManipulator(BaseRobot):
                 end_effector_link_index=self.END_EFFECTOR_LINK_INDEX,
                 target_position=target_position_cartesian,
                 target_orientation=target_orientation_quaternions,
-                restPoses=[0] * len(self.lower_joint_limits),
-                lowerLimits=self.lower_joint_limits,
-                upperLimits=self.upper_joint_limits,
-                jointRanges=[
+                rest_poses=[0] * len(self.lower_joint_limits),
+                lower_limits=self.lower_joint_limits,
+                upper_limits=self.upper_joint_limits,
+                joint_ranges=[
                     abs(up - low)
                     for up, low in zip(self.upper_joint_limits, self.lower_joint_limits)
                 ],
-                maxNumIterations=250,
-                residualThreshold=1e-9,
+                max_num_iterations=250,
+                residual_threshold=1e-9,
             )
         else:
             # We removed the limits because they made the inverse kinematics fail.
@@ -518,16 +518,16 @@ class BaseManipulator(BaseRobot):
                 end_effector_link_index=self.END_EFFECTOR_LINK_INDEX,
                 target_position=target_position_cartesian,
                 target_orientation=target_orientation_quaternions,
-                restPoses=[0] * len(self.lower_joint_limits),
-                jointDamping=[0.001] * len(self.lower_joint_limits),
-                lowerLimits=self.lower_joint_limits,
-                upperLimits=self.upper_joint_limits,
-                jointRanges=[
+                rest_poses=[0] * len(self.lower_joint_limits),
+                joint_damping=[0.001] * len(self.lower_joint_limits),
+                lower_limits=self.lower_joint_limits,
+                upper_limits=self.upper_joint_limits,
+                joint_ranges=[
                     abs(up - low)
                     for up, low in zip(self.upper_joint_limits, self.lower_joint_limits)
                 ],
-                maxNumIterations=180,
-                residualThreshold=1e-6,
+                max_num_iterations=180,
+                residual_threshold=1e-6,
             )
 
         return np.array(target_q_rad)[np.array(self.actuated_joints)]
@@ -873,7 +873,7 @@ class BaseManipulator(BaseRobot):
             add_debug_lines(
                 line_from_XYZ=start_point,
                 line_to_XYZ=end_point,
-                line_color_RGB=[0, 1, 0],
+                line_color_RGB=[[0, 1, 0]],
                 line_width=2,
                 life_time=3,
             )

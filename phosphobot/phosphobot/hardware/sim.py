@@ -67,22 +67,24 @@ def reset_simulation():
     """
     Reset the simulation environment.
     """
-    if p.isConnected():
-        p.resetSimulation()
-        logger.info("Simulation reset")
-    else:
+    if not p.isConnected():
         logger.warning("Simulation is not connected, cannot reset")
+        return
+
+    p.resetSimulation()
+    logger.info("Simulation reset")
 
 
 def step_simulation(steps=960):
     """
     Step the simulation environment.
     """
-    if p.isConnected():
-        for _ in range(steps):
-            p.stepSimulation()
-    else:
+    if not p.isConnected():
         logger.warning("Simulation is not connected, cannot step")
+        return
+
+    for _ in range(steps):
+        p.stepSimulation()
 
 
 def set_joint_state(robot_id, joint_id: int, joint_position: float):
@@ -94,10 +96,11 @@ def set_joint_state(robot_id, joint_id: int, joint_position: float):
         joint_id (int): The ID of the joint to set.
         joint_position (float): The position to set the joint to.
     """
-    if p.isConnected():
-        p.resetJointState(robot_id, joint_id, joint_position)
-    else:
+    if not p.isConnected():
         logger.warning("Simulation is not connected, cannot set joint state")
+        return
+
+    p.resetJointState(robot_id, joint_id, joint_position)
 
 
 def inverse_dynamics(
@@ -107,20 +110,20 @@ def inverse_dynamics(
     accelerations: list,
 ):
     """
-    Perform inverse kinematics to compute joint angles from end-effector pose.
+    Perform inverse dynamics to compute joint angles from end-effector pose.
     """
-    if p.isConnected():
-        # Call the PyBullet inverse kinematics function
-        joint_angles = p.calculateInverseDynamics(
-            robot_id, positions, velocities, accelerations
-        )
-        return joint_angles
-    else:
-        logger.warning("Simulation is not connected, cannot perform inverse kinematics")
-        return None
+    if not p.isConnected():
+        logger.warning("Simulation is not connected, cannot perform inverse dynamics")
+        return
+
+    # Call the PyBullet inverse dynamics function
+    joint_angles = p.calculateInverseDynamics(
+        robot_id, positions, velocities, accelerations
+    )
+    return joint_angles
 
 
-def loadURDF(
+def load_URDF(
     urdf_path: str,
     axis: list[float] | None,
     axis_orientation: list[int],
@@ -138,26 +141,26 @@ def loadURDF(
     Returns:
         int: The ID of the loaded robot in the simulation.
     """
-    if p.isConnected():
-        robot_id = p.loadURDF(
-            urdf_path,
-            basePosition=axis,
-            baseOrientation=axis_orientation,
-            useFixedBase=use_fixed_base,
-            flags=p.URDF_MAINTAIN_LINK_ORDER,
-        )
-        num_joints = p.getNumJoints(robot_id)
-        actuated_joints = []
-        for i in range(num_joints):
-            joint_type = get_joint_info(robot_id, i)[2]
-
-            # Consider only revolute joints
-            if joint_type in [p.JOINT_REVOLUTE]:
-                actuated_joints.append(i)
-        return robot_id, num_joints, actuated_joints
-    else:
+    if not p.isConnected():
         logger.warning("Simulation is not connected, cannot load URDF")
         return None
+
+    robot_id = p.loadURDF(
+        urdf_path,
+        basePosition=axis,
+        baseOrientation=axis_orientation,
+        useFixedBase=use_fixed_base,
+        flags=p.URDF_MAINTAIN_LINK_ORDER,
+    )
+    num_joints = p.getNumJoints(robot_id)
+    actuated_joints = []
+    for i in range(num_joints):
+        joint_type = get_joint_info(robot_id, i)[2]
+
+        # Consider only revolute joints
+        if joint_type in [p.JOINT_REVOLUTE]:
+            actuated_joints.append(i)
+    return robot_id, num_joints, actuated_joints
 
 
 def set_joints_states(robot_id, joint_indices, target_positions):
@@ -169,15 +172,16 @@ def set_joints_states(robot_id, joint_indices, target_positions):
         joint_indices (list[int]): The indices of the joints to set.
         target_positions (list[float]): The positions to set the joints to.
     """
-    if p.isConnected():
-        p.setJointMotorControlArray(
-            bodyIndex=robot_id,
-            jointIndices=joint_indices,
-            controlMode=p.POSITION_CONTROL,
-            targetPositions=target_positions,
-        )
-    else:
+    if not p.isConnected():
         logger.warning("Simulation is not connected, cannot set joint states")
+        return
+
+    p.setJointMotorControlArray(
+        bodyIndex=robot_id,
+        jointIndices=joint_indices,
+        controlMode=p.POSITION_CONTROL,
+        targetPositions=target_positions,
+    )
 
 
 def get_joint_state(robot_id, joint_index: int) -> list:
@@ -191,12 +195,12 @@ def get_joint_state(robot_id, joint_index: int) -> list:
     Returns:
         list: pybullet list describing the joit state.
     """
-    if p.isConnected():
-        joint_state = p.getJointState(robot_id, joint_index)
-        return joint_state
-    else:
+    if not p.isConnected():
         logger.warning("Simulation is not connected, cannot get joint state")
         return []
+
+    joint_state = p.getJointState(robot_id, joint_index)
+    return joint_state
 
 
 def inverse_kinematics(
@@ -204,13 +208,13 @@ def inverse_kinematics(
     end_effector_link_index: int,
     target_position,
     target_orientation,
-    restPoses: list,
-    jointDamping: list | None = None,
-    lowerLimits: list | None = None,
-    upperLimits: list | None = None,
-    jointRanges: list | None = None,
-    maxNumIterations: int = 200,
-    residualThreshold: float = 1e-6,
+    rest_poses: list,
+    joint_damping: list | None = None,
+    lower_limits: list | None = None,
+    upper_limits: list | None = None,
+    joint_ranges: list | None = None,
+    max_num_iterations: int = 200,
+    residual_threshold: float = 1e-6,
 ) -> list:
     """
     Perform inverse kinematics to compute joint angles from end-effector pose.
@@ -230,37 +234,37 @@ def inverse_kinematics(
     Returns:
         list: Joint angles computed by inverse kinematics.
     """
-    if p.isConnected():
-        if jointDamping is None:
-            return p.calculateInverseKinematics(
-                robot_id,
-                end_effector_link_index,
-                targetPosition=target_position,
-                targetOrientation=target_orientation,
-                restPoses=restPoses,
-                lowerLimits=lowerLimits,
-                upperLimits=upperLimits,
-                jointRanges=jointRanges,
-                maxNumIterations=maxNumIterations,
-                residualThreshold=residualThreshold,
-            )
+    if not p.isConnected():
+        logger.warning("Simulation is not connected, cannot perform inverse kinematics")
+        return []
+
+    if joint_damping is None:
         return p.calculateInverseKinematics(
             robot_id,
             end_effector_link_index,
             targetPosition=target_position,
             targetOrientation=target_orientation,
-            jointDamping=jointDamping,
-            solver=p.IK_SDLS,
-            restPoses=restPoses,
-            lowerLimits=lowerLimits,
-            upperLimits=upperLimits,
-            jointRanges=jointRanges,
-            maxNumIterations=maxNumIterations,
-            residualThreshold=residualThreshold,
+            restPoses=rest_poses,
+            lowerLimits=lower_limits,
+            upperLimits=upper_limits,
+            joint_ranges=joint_ranges,
+            max_num_iterations=max_num_iterations,
+            residual_threshold=residual_threshold,
         )
-    else:
-        logger.warning("Simulation is not connected, cannot perform inverse kinematics")
-        return []
+    return p.calculateInverseKinematics(
+        robot_id,
+        end_effector_link_index,
+        targetPosition=target_position,
+        targetOrientation=target_orientation,
+        jointDamping=joint_damping,
+        solver=p.IK_SDLS,
+        restPoses=rest_poses,
+        lowerLimits=lower_limits,
+        upperLimits=upper_limits,
+        jointRanges=joint_ranges,
+        maxNumIterations=max_num_iterations,
+        residualThreshold=residual_threshold,
+    )
 
 
 def get_link_state(
@@ -276,14 +280,14 @@ def get_link_state(
     Returns:
         list: pybullet list describing the link state.
     """
-    if p.isConnected():
-        link_state = p.getLinkState(
-            robot_id, link_index, computeForwardKinematics=compute_forward_kinematics
-        )
-        return link_state
-    else:
+    if not p.isConnected():
         logger.warning("Simulation is not connected, cannot get link state")
         return []
+
+    link_state = p.getLinkState(
+        robot_id, link_index, computeForwardKinematics=compute_forward_kinematics
+    )
+    return link_state
 
 
 def get_joint_info(robot_id, joint_index: int) -> list:
@@ -297,12 +301,12 @@ def get_joint_info(robot_id, joint_index: int) -> list:
     Returns:
         list: pybullet list describing the joint info.
     """
-    if p.isConnected():
-        joint_info = p.getJointInfo(robot_id, joint_index)
-        return joint_info
-    else:
+    if not p.isConnected():
         logger.warning("Simulation is not connected, cannot get joint info")
         return []
+
+    joint_info = p.getJointInfo(robot_id, joint_index)
+    return joint_info
 
 
 def add_debug_text(
@@ -320,15 +324,16 @@ def add_debug_text(
         text_color_RGB (list): The color of the text in RGB format.
         life_time (int, optional): The lifetime of the debug text in seconds. Defaults to 3.
     """
-    if p.isConnected():
-        p.addUserDebugText(
-            text=text,
-            textPosition=text_position,
-            textColorRGB=text_color_RGB,
-            lifeTime=life_time,
-        )
-    else:
+    if not p.isConnected():
         logger.warning("Simulation is not connected, cannot add debug text")
+        return
+
+    p.addUserDebugText(
+        text=text,
+        textPosition=text_position,
+        textColorRGB=text_color_RGB,
+        lifeTime=life_time,
+    )
 
 
 def add_debug_points(
@@ -337,31 +342,33 @@ def add_debug_points(
     point_size: int = 4,
     life_time: int = 3,
 ):
-    if p.isConnected():
-        p.addUserDebugPoints(
-            pointPositions=point_positions,
-            pointColorsRGB=point_colors_RGB,
-            pointSize=point_size,
-            lifeTime=life_time,
-        )
-    else:
+    if not p.isConnected():
         logger.warning("Simulation is not connected, cannot add debug points")
+        return
+
+    p.addUserDebugPoints(
+        pointPositions=point_positions,
+        pointColorsRGB=point_colors_RGB,
+        pointSize=point_size,
+        lifeTime=life_time,
+    )
 
 
 def add_debug_lines(
-    line_from_XYZ,
-    line_to_XYZ,
-    line_color_RGB,
-    line_width=4,
-    life_time=3,
+    line_from_XYZ: list,
+    line_to_XYZ: list,
+    line_color_RGB: list,
+    line_width: int = 4,
+    life_time: int = 3,
 ):
-    if p.isConnected():
-        p.addUserDebugLine(
-            lineFromXYZ=line_from_XYZ,
-            lineToXYZ=line_to_XYZ,
-            lineColorRGB=line_color_RGB,
-            lineWidth=line_width,
-            lifeTime=life_time,
-        )
-    else:
+    if not p.isConnected():
         logger.warning("Simulation is not connected, cannot add debug lines")
+        return
+
+    p.addUserDebugLine(
+        lineFromXYZ=line_from_XYZ,
+        lineToXYZ=line_to_XYZ,
+        lineColorRGB=line_color_RGB,
+        lineWidth=line_width,
+        lifeTime=life_time,
+    )

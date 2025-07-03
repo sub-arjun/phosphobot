@@ -7,7 +7,7 @@ from .sim import (
     set_joint_state,
     get_joint_state,
     inverse_dynamics,
-    loadURDF,
+    load_URDF,
     set_joints_states,
     inverse_kinematics,
     get_joint_info,
