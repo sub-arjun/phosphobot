@@ -1256,23 +1256,6 @@ class AllCameras:
                 logger.warning(f"Unknown camera type: {camera.camera_type}")
         return frames
 
-    def get_depth_frame(
-        self, resize: Optional[tuple[int, int]] = None
-    ) -> Optional[cv2.typing.MatLike]:
-        """
-        Get the depth frame.
-
-        Note: you need to have a realsense camera connected to get the depth frame.
-        """
-        # Look for the VirtualRealsenseCamera with
-        for camera in self.video_cameras:
-            if isinstance(camera, RealSenseVirtualCamera):
-                if camera.frame_type == "depth":
-                    return camera.get_rgb_frame(resize=resize)
-
-        # If no realsense camera is available, return None
-        return None
-
     @property
     def cameras_ids_to_record(self) -> List[int]:
         """
