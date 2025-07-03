@@ -29,7 +29,13 @@ def simulation_init():
         # cd ./simulation/pybullet && uv run --python 3.8 main.py
         absolute_path = os.path.abspath(
             os.path.join(
-                os.path.dirname(__file__), "..", "..", "..", "simulation", "pybullet"
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "..",
+                "..",
+                "simulation",
+                "pybullet",
             )
         )
         subprocess.Popen(["uv", "run", "--python", "3.8", "main.py"], cwd=absolute_path)
