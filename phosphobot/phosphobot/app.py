@@ -66,12 +66,12 @@ def get_local_ip() -> str:
 async def lifespan(app: FastAPI):
     # Initialize telemetry
     init_telemetry()
-    # Initialize cameras
-    rcm = get_rcm()
     udp_server = get_udp_server()
     # Initialize pybullet simulation
     sim = get_sim()
     sim.init_simulation()
+    # Initialize rcm
+    rcm = get_rcm()
 
     try:
         login_to_hf()
