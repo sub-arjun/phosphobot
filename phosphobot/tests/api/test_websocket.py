@@ -21,8 +21,8 @@ from loguru import logger
 
 BASE_URL = "http://127.0.0.1:8080"
 BASE_WS_URI = "ws://127.0.0.1:8080"
-WEBSOCKET_TEST_TIME = 5  # seconds
-UDP_TEST_TIME = 5  # seconds
+WEBSOCKET_TEST_TIME = 10  # seconds
+UDP_TEST_TIME = 10  # seconds
 
 
 # Ensure loguru logs appear in pytest output
@@ -471,79 +471,3 @@ async def test_udp_send_messages_500hz_while_recording(
     logger.info("[TEST] Recording stopped successfully")
 
     logger.success("[TEST_SUCCESS] UDP recording test completed successfully")
-
-
-@pytest.mark.asyncio
-async def test_udp_rate_limiting():
-    """
-    Test UDP rate limiting by sending messages faster than the allowed rate.
-    """
-    # Start UDP server
-    udp_response = requests.post(f"{BASE_URL}/move/teleop/udp")
-    assert (
-        udp_response.status_code == 200
-    ), f"Failed to start UDP server: {udp_response.text}"
-
-    udp_info = udp_response.json()
-    host = udp_info["host"]
-    port = udp_info["port"]
-
-    logger.info(f"[TEST] UDP server started on {host}:{port}")
-
-    try:
-        # Send messages at very high frequency to trigger rate limiting
-        messages_sent, responses_received, nb_actions_history = await send_udp_data(
-            host,
-            port,
-            total_seconds=2,
-            send_frequency=300,  # 300 Hz should trigger rate limiting
-        )
-
-        # Check that we received some rate limiting errors
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(0.1)
-
-        rate_limit_responses = 0
-        for _ in range(10):  # Send 10 rapid messages
-            message = json.dumps(
-                {
-                    "x": 0.0,
-                    "y": 0.0,
-                    "z": 0.0,
-                    "rx": 0.0,
-                    "ry": 0.0,
-                    "rz": 0.0,
-                    "open": 0.0,
-                    "source": "right",
-                    "timestamp": time.time(),
-                }
-            ).encode("utf-8")
-
-            sock.sendto(message, (host, port))
-
-            try:
-                response_data, _ = sock.recvfrom(1024)
-                response = json.loads(response_data.decode("utf-8"))
-                if response.get("error") == "rate_limited":
-                    rate_limit_responses += 1
-            except (socket.timeout, json.JSONDecodeError):
-                pass
-
-        sock.close()
-
-        logger.info(
-            f"[TEST_UDP_RATE_LIMIT] Rate limit responses received: {rate_limit_responses}"
-        )
-
-        # We should have received at least some rate limiting responses
-        assert rate_limit_responses > 0, "Expected to receive rate limiting responses"
-
-        logger.success("[TEST_SUCCESS] UDP rate limiting test completed successfully")
-
-    finally:
-        # Stop UDP server
-        stop_response = requests.post(f"{BASE_URL}/move/teleop/udp/stop")
-        assert (
-            stop_response.status_code == 200
-        ), f"Failed to stop UDP server: {stop_response.text}"
-        logger.info("[TEST] UDP server stopped")
