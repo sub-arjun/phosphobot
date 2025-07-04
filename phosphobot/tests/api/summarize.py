@@ -35,7 +35,6 @@ def main(log_file: str, out_file: str):
     udp_performance_line_500Hz: str = ""
     udp_performance_line_1000Hz: str = ""
     udp_performance_recording_line_500Hz: str = ""
-    udp_rate_limit_line: str = ""
 
     # Parse the log file
     for line in lines:
@@ -64,8 +63,6 @@ def main(log_file: str, out_file: str):
             udp_performance_recording_line_500Hz = line[
                 line.find("[TEST_UDP_RECORDING_PERFORMANCE_500Hz]") :
             ]
-        if "[TEST_UDP_RATE_LIMIT]" in line:
-            udp_rate_limit_line = line[line.find("[TEST_UDP_RATE_LIMIT]") :]
 
     # Build a simple markdown summary
     emoji = "✅" if not some_failed else "❌"
@@ -91,8 +88,6 @@ def main(log_file: str, out_file: str):
         summary.append(udp_performance_line_1000Hz.strip())
     if udp_performance_recording_line_500Hz:
         summary.append(udp_performance_recording_line_500Hz.strip())
-    if udp_rate_limit_line:
-        summary.append(udp_rate_limit_line.strip())
 
     summary.append("### Pytests logs summary")
 
