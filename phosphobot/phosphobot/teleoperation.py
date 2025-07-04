@@ -374,7 +374,7 @@ class _TeleopProtocol(asyncio.DatagramProtocol):
         self.transport: Optional[asyncio.DatagramTransport] = None
 
         # Worker pool configuration
-        self.worker_count = 4  # Adjust based on CPU cores
+        self.worker_count = 1  # Adjust based on CPU cores
         self.packet_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)  # Bounded queue
         self.workers: list[asyncio.Task] = []
         self.running = False
