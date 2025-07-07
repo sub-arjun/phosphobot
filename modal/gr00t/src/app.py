@@ -21,7 +21,7 @@ if os.getenv("MODAL_ENVIRONMENT") == "production":
 
 # TODO: add HF_TRANSFER for faster downloads?
 phosphobot_dir = (
-    Path(__file__).parent.parent.parent.parent / "phosphobot" / "phosphobot"
+    Path(__file__).parent.parent.parent.parent.parent / "phosphobot" / "phosphobot"
 )
 gr00t_image = (
     modal.Image.from_dockerfile("Dockerfile")

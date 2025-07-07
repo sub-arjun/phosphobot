@@ -27,7 +27,7 @@ from phosphobot.models.lerobot_dataset import LeRobotDataset
 MIN_NUMBER_OF_EPISODES = 10
 
 phosphobot_dir = (
-    Path(__file__).parent.parent.parent.parent / "phosphobot" / "phosphobot"
+    Path(__file__).parent.parent.parent.parent.parent / "phosphobot" / "phosphobot"
 )
 act_image = (
     modal.Image.from_dockerfile("Dockerfile")
