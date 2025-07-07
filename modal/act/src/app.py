@@ -36,6 +36,7 @@ act_image = (
         "supabase",
         "sentry-sdk",
         "huggingface_hub[hf_transfer]",
+        "hf_xet",
         "wandb",
         "accelerate",
         "httpx>=0.28.1",
