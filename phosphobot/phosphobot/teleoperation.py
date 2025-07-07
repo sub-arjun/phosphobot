@@ -374,7 +374,9 @@ class _TeleopProtocol(asyncio.DatagramProtocol):
         self.transport: Optional[asyncio.DatagramTransport] = None
 
         # Worker pool configuration
-        self.worker_count = 1  # Adjust based on CPU cores
+        # We use a single worker because we want to process packets sequentially
+        # (they are robotics movements, not parallelizable)
+        self.worker_count = 1
         self.packet_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)  # Bounded queue
         self.workers: list[asyncio.Task] = []
         self.running = False
