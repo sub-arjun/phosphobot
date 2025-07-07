@@ -231,11 +231,18 @@ async def inference(request: InferenceRequest) -> str | None:
             feature for feature in input_features.keys() if "image" in feature
         ]
 
+        if "observation.state" not in payload:
+            logger.error("observation.state not found in payload")
+            raise ValueError("observation.state required in payload")
+
         if len(payload.keys()) != len(input_features.keys()):
             for feature in input_features.keys():
                 if feature not in payload:
                     logger.error(f"{feature} required but not found in payload")
             raise ValueError("Missing required features in payload")
+        else:
+            shape = input_features[image_names[0]]["shape"]
+            target_size = (shape[2], shape[1])
 
         # Infer actions
         actions = process_image(
