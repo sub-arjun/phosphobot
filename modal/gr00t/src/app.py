@@ -45,8 +45,9 @@ gr00t_image = (
         "zmq>=0.0.0",
         "av>=14.2.1",
         "wandb",
+        "huggingface_hub[hf_transfer]",
+        "hf_xet",
     )
-    .pip_install("huggingface_hub[hf_transfer]")
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
     .env({"HF_HUB_DISABLE_TELEMETRY": "1"})
     .pip_install_from_pyproject(
