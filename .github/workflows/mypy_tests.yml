@@ -52,3 +52,47 @@ jobs:
 
       - name: Run mypy
         run: uv run mypy ./ --ignore-missing-imports --follow-imports=silent || exit 1
+
+  mypy_modal_tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: modal/
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create minimal pyproject.toml file in lerobot folder
+        run: |
+          mkdir -p /lerobot
+          cat > /lerobot/pyproject.toml << 'EOF'
+          [build-system]
+          requires = ["poetry-core"]
+          build-backend = "poetry.core.masonry.api"
+
+          [tool.poetry]
+          name = "lerobot"
+          version = "0.1.0"
+          description = "Minimal lerobot placeholder"
+          authors = ["Placeholder <placeholder@example.com>"]
+          packages = [{include = "lerobot"}]
+
+          [tool.poetry.dependencies]
+          python = ">=3.10,<3.13"
+          EOF
+          touch /lerobot/__init__.py
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "/phosphobot/pyproject.toml"
+
+      - name: Set up Python
+        run: uv python pin 3.11 && uv python install
+
+      - name: Install the project
+        run: |
+          uv sync --dev
+
+      - name: Run mypy
+        run: uv run mypy ./ --ignore-missing-imports --follow-imports=silent || exit 1
