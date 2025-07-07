@@ -19,7 +19,9 @@ from phosphobot.am.base import TrainingRequest
 from phosphobot.am.gr00t import Gr00tN1, Gr00tSpawnConfig
 from phosphobot.models import CancelTrainingRequest
 
-phosphobot_dir = Path(__file__).parent.parent.parent / "phosphobot" / "phosphobot"
+phosphobot_dir = (
+    Path(__file__).parent.parent.parent.parent / "phosphobot" / "phosphobot"
+)
 admin_image = (
     modal.Image.debian_slim(python_version="3.10")
     .pip_install(
