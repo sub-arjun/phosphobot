@@ -1,5 +1,7 @@
 # Modal
 
+We use modal as a GPU provider, phosphobot can train and run inference on several robotics models by running the scripts in this folder through modal.
+
 ## Installation
 
 Login to modal and click on `phospho`/`your_own_space` in the webpage that opens in your browser.
