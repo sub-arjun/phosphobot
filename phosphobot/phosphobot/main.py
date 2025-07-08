@@ -245,6 +245,12 @@ def run(
         bool,
         typer.Option(help="Enable the RealSense camera."),
     ] = True,
+    can: Annotated[
+        bool,
+        typer.Option(
+            help="Enable the CAN scanning. If False, CAN devices will not detected. Useful in case of conflicts.",
+        ),
+    ] = True,
     cameras: Annotated[
         bool,
         typer.Option(
@@ -282,6 +288,7 @@ def run(
     config.PORT = port
     config.PROFILE = profile
     config.TELEMETRY = telemetry
+    config.ENABLE_CAN = can
 
     # Start the FastAPI app using uvicorn with port retry logic
     ports = [port]
