@@ -1,3 +1,4 @@
+import asyncio
 import time
 import subprocess
 from typing import Any, List, Literal, Optional, Union
@@ -96,7 +97,7 @@ class PiperHardware(BaseManipulator):
     async def connect(self):
         """
         Setup the robot.
-        can_number : 0 if only one robot is connected, 1 to connec to second robot
+        can_number : 0 if only one robot is connected, 1 to connect to second robot
         """
         self.is_connected = False
 
@@ -124,26 +125,34 @@ class PiperHardware(BaseManipulator):
         self.motors_bus = C_PiperInterface_V2(
             can_name=self.can_name, judge_flag=True, can_auto_init=True
         )
-        time.sleep(0.1)
+        asyncio.sleep(0.1)
+        # Check if CAN bus is OK
+        is_ok = self.motors_bus.isOk()
+        if not is_ok:
+            logger.debug(
+                f"Could not connect to Agilex Piper on {self.can_name}: CAN bus is not OK."
+            )
+            return
+
         self.motors_bus.ConnectPort(can_init=True)
-        time.sleep(0.1)
+        asyncio.sleep(0.1)
         self.motors_bus.ArmParamEnquiryAndConfig(
             param_setting=0x01,
             # data_feedback_0x48x=0x02,
             end_load_param_setting_effective=0,
             set_end_load=0x0,
         )
-        time.sleep(0.1)
+        asyncio.sleep(0.1)
         # First, start standby mode (ctrl_mode=0x00). Then, switch to CAN command control mode (ctrl_mode=0x01)
         # Source: https://static.generation-robots.com/media/agilex-piper-user-manual.pdf
         self.motors_bus.MotionCtrl_2(
             ctrl_mode=0x00, move_mode=0x01, move_spd_rate_ctrl=100, is_mit_mode=0x00
         )
-        time.sleep(0.1)
+        asyncio.sleep(0.1)
         self.motors_bus.MotionCtrl_2(
             ctrl_mode=0x01, move_mode=0x01, move_spd_rate_ctrl=100, is_mit_mode=0x00
         )
-        time.sleep(0.2)
+        asyncio.sleep(0.2)
 
         self.is_connected = True
         self.init_config()
