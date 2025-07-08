@@ -36,6 +36,9 @@ async def check_pro_user(user_id: str) -> bool:
         response = (
             await client.table("users").select("plan").eq("id", user_id).execute()
         )
+        if response.data is None or len(response.data) == 0:
+            logger.info("Assuming free user")
+            return False
         return response.data[0].get("plan", None) == "pro"
     except Exception as e:
         logger.error(f"Error checking Pro user status for {user_id}: {e}")
