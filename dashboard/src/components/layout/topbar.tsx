@@ -17,7 +17,13 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { fetcher } from "@/lib/utils";
 import { ServerStatus } from "@/types";
-import { BookText, BrainCircuit, LogOut } from "lucide-react";
+import {
+  BookText,
+  BrainCircuit,
+  LogOut,
+  ShieldCheck,
+  ShieldOff,
+} from "lucide-react";
 import useSWR from "swr";
 
 const routeMap = [
@@ -150,7 +156,7 @@ export function AIControlStatus() {
 
 export function TopBar() {
   const currentPath = window.location.pathname;
-  const { session, logout } = useAuth();
+  const { session, proUser, logout } = useAuth();
 
   const matchedRoute = routeMap.find(({ path, isPrefix }) =>
     isPrefix ? currentPath.startsWith(path) : currentPath === path,
@@ -209,6 +215,14 @@ export function TopBar() {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem className="text-sm text-muted-foreground">
                   {session.user_email}
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  {proUser ? (
+                    <ShieldCheck className="mr-2 h-4 w-4 text-green-500" />
+                  ) : (
+                    <ShieldOff className="mr-2 h-4 w-4 text-red-500" />
+                  )}
+                  {proUser ? "Pro User" : "Free User"}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={logout}>
                   <LogOut className="mr-2 h-4 w-4" />

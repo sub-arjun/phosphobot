@@ -24,6 +24,27 @@ from phosphobot.supabase import (
 router = APIRouter(tags=["auth"])
 
 
+async def check_pro_user(user_id: str) -> bool:
+    """
+    Check if the user is a Pro user.
+    This function should implement the logic to check if the user has a Pro subscription.
+    For now, it returns True for all users.
+    """
+    client = await get_client()
+
+    try:
+        response = (
+            await client.table("users").select("plan").eq("id", user_id).execute()
+        )
+        if response.data is None or len(response.data) == 0:
+            logger.info("Assuming free user")
+            return False
+        return response.data[0].get("plan", None) == "pro"
+    except Exception as e:
+        logger.error(f"Error checking Pro user status for {user_id}: {e}")
+        return False
+
+
 @router.post("/auth/signup", response_model=SessionReponse)
 async def signup(
     credentials: LoginCredentialsRequest,
@@ -59,7 +80,12 @@ async def signup(
                 )
                 add_email_to_posthog(response.user.email)
                 add_email_to_sentry(response.user.email)
-                return SessionReponse(message="Signup successful", session=session)
+                is_pro_user = await check_pro_user(response.user.id)
+                return SessionReponse(
+                    message="Signup successful",
+                    session=session,
+                    is_pro_user=is_pro_user,
+                )
             else:
                 return SessionReponse(
                     message="Signup successful, please check your email for confirmation."
@@ -110,9 +136,11 @@ async def signin(
         )
         add_email_to_posthog(response.user.email)
         add_email_to_sentry(response.user.email)
+        is_pro_user = await check_pro_user(response.user.id)
         return SessionReponse(
             message="Signin successful",
             session=session,
+            is_pro_user=is_pro_user,
         )
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid credentials: {e}")
@@ -167,10 +195,12 @@ async def confirm_email(request: ConfirmRequest) -> SessionReponse | HTTPExcepti
         save_session(session)
         add_email_to_posthog(response.user.email)
         add_email_to_sentry(response.user.email)
+        is_pro_user = await check_pro_user(response.user.id)
 
         return SessionReponse(
             message="Email confirmed successfully",
             session=session,
+            is_pro_user=is_pro_user,
         )
     except Exception as e:
         raise HTTPException(

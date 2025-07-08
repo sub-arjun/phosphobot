@@ -1,113 +1,122 @@
+import { fetchWithBaseUrl } from "@/lib/utils";
 import { Session } from "@/types";
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-
+import {
+  ReactNode,
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 interface AuthContextType {
-    session: Session | null;
-    isLoading: boolean;
-    login: (email: string, password: string, session?: Session) => Promise<void>;
-    signup: (email: string, password: string) => Promise<void>;
-    logout: () => Promise<void>;
+  session: Session | null;
+  isLoading: boolean;
+  proUser: boolean | null;
+  login: (email: string, password: string, session?: Session) => Promise<void>;
+  signup: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-    const [session, setSession] = useState<Session | null>(null);
-    const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [proUser, setProUser] = useState<boolean | null>(null);
 
-    useEffect(() => {
-        const storedSession = localStorage.getItem("session");
-        if (storedSession) {
-            setSession(JSON.parse(storedSession));
-        }
-        setIsLoading(false);
-    }, []);
+  useEffect(() => {
+    const storedSession = localStorage.getItem("session");
+    if (storedSession) {
+      setSession(JSON.parse(storedSession));
+    }
+    const storedProUser = localStorage.getItem("proUser");
+    if (storedProUser) {
+      setProUser(JSON.parse(storedProUser));
+    }
+    setIsLoading(false);
+  }, []);
 
-    const login = async (
-        email: string,
-        password: string,
-        directSession?: Session
-    ): Promise<void> => {
-        if (directSession) {
-            // Direct session from email confirmation
-            setSession(directSession);
-            localStorage.setItem("session", JSON.stringify(directSession));
-            return;
-        }
+  const login = async (
+    email: string,
+    password: string,
+    directSession?: Session,
+  ): Promise<void> => {
+    if (directSession) {
+      // Direct session from email confirmation
+      setSession(directSession);
+      localStorage.setItem("session", JSON.stringify(directSession));
+      return;
+    }
 
-        const response = await fetch("/auth/signin", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password }),
-        });
-        if (!response.ok) {
-            throw new Error("Login failed");
-        }
-        const data: { message: string; session: Session } = await response.json();
-        localStorage.setItem("session", JSON.stringify(data.session));
-        setSession(data.session);
-    };
+    const response: {
+      message: string;
+      session: Session;
+      is_pro_user: boolean | null | undefined;
+    } = await fetchWithBaseUrl("/auth/signin", "POST", {
+      email,
+      password,
+    });
+    localStorage.setItem("session", JSON.stringify(response.session));
+    setSession(response.session);
+    localStorage.setItem("proUser", JSON.stringify(response.is_pro_user));
+    setProUser(response.is_pro_user ?? false);
+  };
 
-    const signup = async (email: string, password: string): Promise<void> => {
-        const response = await fetch("/auth/signup", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password }),
-        });
-        if (!response.ok) {
-            throw new Error("Signup failed");
-        }
-        const data: { message: string; session?: Session } = await response.json();
-        if (data.session) {
-            localStorage.setItem("session", JSON.stringify(data.session));
-            setSession(data.session);
-        }
-    };
+  const signup = async (email: string, password: string): Promise<void> => {
+    const response: {
+      message: string;
+      session?: Session;
+      is_pro_user: boolean | null | undefined;
+    } = await fetchWithBaseUrl("/auth/signup", "POST", {
+      email,
+      password,
+    });
+    if (response.session) {
+      localStorage.setItem("session", JSON.stringify(response.session));
+      setSession(response.session);
+    }
+    localStorage.setItem("proUser", JSON.stringify(response.is_pro_user));
+    setProUser(response.is_pro_user ?? false);
+  };
 
-    const logout = async (): Promise<void> => {
-        await fetch("/auth/logout", { method: "POST" });
-        localStorage.removeItem("session");
-        setSession(null);
-    };
+  const logout = async (): Promise<void> => {
+    await fetchWithBaseUrl("/auth/logout", "POST");
+    localStorage.removeItem("session");
+    setSession(null);
+  };
 
-    const validateSession = async () => {
-        try {
-            const response = await fetch("/auth/check_auth", {
-                headers: {
-                    "Authorization": `Bearer ${session?.access_token}`,
-                },
-            });
-            if (!response.ok) {
-                throw new Error("Session invalid");
-            }
-            const data = await response.json();
-            if (!data.authenticated) {
-                logout();
-            }
-        } catch (e) {
-            console.error("Session validation failed:", e);
-            logout();
-        }
-    };
+  const validateSession = async () => {
+    try {
+      const response: { authenticated: boolean; session: Session } =
+        await fetchWithBaseUrl("/auth/check_auth", "GET");
+      if (!response.authenticated) {
+        logout();
+      }
+    } catch (e) {
+      console.error("Session validation failed:", e);
+      logout();
+    }
+  };
 
-    useEffect(() => {
-        if (session) {
-            validateSession();
-        }
-    }, [isLoading, session]);
+  useEffect(() => {
+    if (session) {
+      validateSession();
+    }
+  }, [isLoading, session]);
 
-    return (
-        <AuthContext.Provider value={{ session, isLoading, login, signup, logout }}>
-            {children}
-        </AuthContext.Provider>
-    );
+  return (
+    <AuthContext.Provider
+      value={{ session, isLoading, proUser, login, signup, logout }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextType {
-    const context = useContext(AuthContext);
-    if (context === undefined) {
-        throw new Error("useAuth must be used within an AuthProvider");
-    }
-    return context;
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }
