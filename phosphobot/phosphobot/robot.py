@@ -73,14 +73,17 @@ class RobotConnectionManager:
 
         available_ports = list_ports.comports()
 
-        # Look for CAN ports
-        can_ports = []
-        for i in range(2):  # Adjust based on maximum expected CAN interfaces
-            can_name = f"can{i}"
-            if is_can_plugged(can_name):
-                can_ports.append(can_name)
+        if config.ENABLE_CAN:
+            # Look for CAN ports
+            can_ports = []
+            for i in range(2):  # Adjust based on maximum expected CAN interfaces
+                can_name = f"can{i}"
+                if is_can_plugged(can_name):
+                    can_ports.append(can_name)
+            available_can_ports = can_ports
+        else:
+            available_can_ports = []
 
-        available_can_ports = can_ports
         self.last_scan_time = time.time()
         return available_ports, available_can_ports
 
