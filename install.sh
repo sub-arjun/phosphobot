@@ -374,9 +374,18 @@ main() {
     # Common installation steps
     if [[ "$PLATFORM" != "darwin" ]]; then
         echo "Installing phosphobot..."
-        curl -fsSL https://europe-west1-apt.pkg.dev/doc/repo-signing-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/phosphobot-archive-keyring.gpg
+        # Note: if you see the following warning:
+        # W: https://europe-west1-apt.pkg.dev/projects/portal-385519/dists/phospho-apt/InRelease: Key is stored in legacy trusted.gpg keyring (/etc/apt/trusted.gpg), see the DEPRECATION section in apt-key(8) for details.
+        # This is because we used to use apt-key and to store keyrings in /etc/apt/trusted.gpg, which is deprecated.
+        # We now use /etc/apt/keyrings/phosphobot-archive-keyring
+        # To remove the warning, run the following command:
+        # deb [signed-by=/etc/apt/keyrings/google-cloud-official-archive-keyring.gpg] https://europe-west1-apt.pkg.dev/projects/portal-385519 phospho-apt main
+        # This will create the keyring file in the correct location.
 
-        echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/phosphobot-archive-keyring.gpg] https://europe-west1-apt.pkg.dev/projects/portal-385519 phospho-apt main" | sudo tee /etc/apt/sources.list.d/phosphobot.list > /dev/null
+        sudo mkdir -p /etc/apt/keyrings
+        curl -fsSL https://europe-west1-apt.pkg.dev/doc/repo-signing-key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/phosphobot-archive-keyring.gpg
+
+        echo "deb [arch=amd64,arm64 signed-by=/etc/apt/keyrings/phosphobot-archive-keyring.gpg] https://europe-west1-apt.pkg.dev/projects/portal-385519 phospho-apt main" | sudo tee /etc/apt/sources.list.d/phosphobot.list > /dev/null
         sudo apt update
         sudo apt install -y phosphobot
     else
