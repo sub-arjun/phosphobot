@@ -1,3 +1,4 @@
+import { fetchWithBaseUrl } from "@/lib/utils";
 import { Session } from "@/types";
 import {
   ReactNode,
@@ -47,65 +48,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const response = await fetch("/auth/signin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    if (!response.ok) {
-      throw new Error("Login failed");
-    }
-    const data: {
+    const response: {
       message: string;
       session: Session;
       is_pro_user: boolean | null | undefined;
-    } = await response.json();
-    localStorage.setItem("session", JSON.stringify(data.session));
-    setSession(data.session);
-    localStorage.setItem("proUser", JSON.stringify(data.is_pro_user));
-    setProUser(data.is_pro_user ?? false);
+    } = await fetchWithBaseUrl("/auth/signin", "POST", {
+      email,
+      password,
+    });
+    localStorage.setItem("session", JSON.stringify(response.session));
+    setSession(response.session);
+    localStorage.setItem("proUser", JSON.stringify(response.is_pro_user));
+    setProUser(response.is_pro_user ?? false);
   };
 
   const signup = async (email: string, password: string): Promise<void> => {
-    const response = await fetch("/auth/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    if (!response.ok) {
-      throw new Error("Signup failed");
-    }
-    const data: {
+    const response: {
       message: string;
       session?: Session;
       is_pro_user: boolean | null | undefined;
-    } = await response.json();
-    if (data.session) {
-      localStorage.setItem("session", JSON.stringify(data.session));
-      setSession(data.session);
+    } = await fetchWithBaseUrl("/auth/signup", "POST", {
+      email,
+      password,
+    });
+    if (response.session) {
+      localStorage.setItem("session", JSON.stringify(response.session));
+      setSession(response.session);
     }
-    localStorage.setItem("proUser", JSON.stringify(data.is_pro_user));
-    setProUser(data.is_pro_user ?? false);
+    localStorage.setItem("proUser", JSON.stringify(response.is_pro_user));
+    setProUser(response.is_pro_user ?? false);
   };
 
   const logout = async (): Promise<void> => {
-    await fetch("/auth/logout", { method: "POST" });
+    await fetchWithBaseUrl("/auth/logout", "POST");
     localStorage.removeItem("session");
     setSession(null);
   };
 
   const validateSession = async () => {
     try {
-      const response = await fetch("/auth/check_auth", {
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-      });
-      if (!response.ok) {
-        throw new Error("Session invalid");
-      }
-      const data = await response.json();
-      if (!data.authenticated) {
+      const response: { authenticated: boolean; session: Session } =
+        await fetchWithBaseUrl("/auth/check_auth", "GET");
+      if (!response.authenticated) {
         logout();
       }
     } catch (e) {
