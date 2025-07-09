@@ -101,20 +101,31 @@ class PiperHardware(BaseManipulator):
         """
         self.is_connected = False
 
+        logger.info(f"Connecting to Agilex Piper on {self.can_name}")
+
         if not is_running_on_linux():
             logger.warning("Robot can only be connected on a Linux machine.")
             return
 
         try:
-            subprocess.run(
+            proc = subprocess.Popen(
                 ["bash", str(get_resources_path() / "agilex_can_activate.sh")],
-                check=True,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=3,
             )
+
+            # Example: read lines one by one, log them
+            for line in proc.stdout:
+                logger.debug("[can-script] " + line.rstrip())
+
+            for line in proc.stderr:
+                logger.error("[can-script] " + line.rstrip())
+
+            proc.wait(timeout=10)
+            if proc.returncode != 0:
+                logger.error("Script exited with %d", proc.returncode)
+                return
         except subprocess.CalledProcessError as e:
             logger.warning(
                 f"CAN Activation Failed!\nError: {e}\nOutput:\n{e.stdout}\nErrors:\n{e.stderr}"
@@ -125,7 +136,7 @@ class PiperHardware(BaseManipulator):
         self.motors_bus = C_PiperInterface_V2(
             can_name=self.can_name, judge_flag=True, can_auto_init=True
         )
-        asyncio.sleep(0.1)
+        await asyncio.sleep(0.1)
         # Check if CAN bus is OK
         is_ok = self.motors_bus.isOk()
         if not is_ok:
@@ -135,24 +146,24 @@ class PiperHardware(BaseManipulator):
             return
 
         self.motors_bus.ConnectPort(can_init=True)
-        asyncio.sleep(0.1)
+        await asyncio.sleep(0.1)
         self.motors_bus.ArmParamEnquiryAndConfig(
             param_setting=0x01,
             # data_feedback_0x48x=0x02,
             end_load_param_setting_effective=0,
             set_end_load=0x0,
         )
-        asyncio.sleep(0.1)
+        await asyncio.sleep(0.1)
         # First, start standby mode (ctrl_mode=0x00). Then, switch to CAN command control mode (ctrl_mode=0x01)
         # Source: https://static.generation-robots.com/media/agilex-piper-user-manual.pdf
         self.motors_bus.MotionCtrl_2(
             ctrl_mode=0x00, move_mode=0x01, move_spd_rate_ctrl=100, is_mit_mode=0x00
         )
-        asyncio.sleep(0.1)
+        await asyncio.sleep(0.1)
         self.motors_bus.MotionCtrl_2(
             ctrl_mode=0x01, move_mode=0x01, move_spd_rate_ctrl=100, is_mit_mode=0x00
         )
-        asyncio.sleep(0.2)
+        await asyncio.sleep(0.2)
 
         self.is_connected = True
         self.init_config()
@@ -196,7 +207,7 @@ class PiperHardware(BaseManipulator):
     def enable_torque(self):
         if not self.is_connected:
             return
-        self.motors_bus.EnableArm(7)
+        self.motors_bus.EnablePiper()
 
     def disable_torque(self):
         # Disable torque
@@ -212,7 +223,7 @@ class PiperHardware(BaseManipulator):
 
         raise: Exception if the routine has not been implemented
         """
-        if servo_id >= self.gripper_servo_id:
+        if servo_id >= self.gripper_servo_id or servo_id < 1:
             gripper_state = self.motors_bus.GetArmGripperMsgs().gripper_state
             return gripper_state.grippers_effort
         else:
@@ -255,6 +266,9 @@ class PiperHardware(BaseManipulator):
             )
 
         # Move robot
+        self.motors_bus.ModeCtrl(
+            ctrl_mode=0x01, move_mode=0x01, move_spd_rate_ctrl=100, is_mit_mode=0x00
+        )
         self.joint_position = current_position.tolist()
         self.motors_bus.JointCtrl(*[int(q) for q in current_position])
 
@@ -270,6 +284,10 @@ class PiperHardware(BaseManipulator):
                 min_limit = self.piper_limits_degrees[i + 1]["min_angle_limit"] * 1000
                 max_limit = self.piper_limits_degrees[i + 1]["max_angle_limit"] * 1000
                 joints[i] = np.clip(joint, min_limit, max_limit)
+        
+        self.motors_bus.ModeCtrl(
+            ctrl_mode=0x01, move_mode=0x01, move_spd_rate_ctrl=100, is_mit_mode=0x00
+        )
 
         self.motors_bus.JointCtrl(*[int(q) for q in joints])
 
@@ -382,6 +400,7 @@ class PiperHardware(BaseManipulator):
         command: 0 to close, 1 to open
         """
         if not self.is_connected:
+            logger.debug("Robot not connected, cannot write gripper command")
             return
         # Gripper -> Convert from 0->RESOLUTION to 0->GRIPPER_MAX_ANGLE
         unit_degree = command * self.GRIPPER_MAX_ANGLE

@@ -3,7 +3,7 @@
 # agilex_can_activate.sh
 set -euo pipefail
 
-DEFAULT_BITRATE="${1:-1000000}"
+DEFAULT_BITRATE="${2:-1000000}"
 CAN_PREFIX="can"
 
 log_success() { echo -e "\e[32m[SUCCESS] $1\e[0m"; }

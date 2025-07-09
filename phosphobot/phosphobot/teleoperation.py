@@ -123,8 +123,8 @@ class TeleopManager:
             if robot_id is not None and i != robot_id:
                 continue
             # For Agilex Piper, we need to connect after enabling torque
-            if robot.name == "agilex-piper":
-                robot.connect()
+            if robot.name == "agilex-piper" and not robot.is_connected:
+                await robot.connect()
             await robot.move_to_initial_position()
 
         # Hard block the code to wait for the robot to reach the initial position
