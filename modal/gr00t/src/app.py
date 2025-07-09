@@ -76,7 +76,7 @@ HOURS = 60 * MINUTES  # seconds
 FUNCTION_IMAGE = gr00t_image
 FUNCTION_GPU: list[str | modal.gpu._GPUConfig | None] = ["A100-40GB", "L40S"]
 FUNCTION_TIMEOUT = 8 * MINUTES  # 2 extra minutes for the policy to load
-TRAINING_TIMEOUT = 3 * HOURS
+TRAINING_TIMEOUT = 12 * HOURS
 
 app = modal.App("gr00t-server")
 gr00t_volume = modal.Volume.from_name("gr00t-n1")
@@ -460,8 +460,8 @@ def _upload_partial_checkpoint_gr00t(
 @app.function(
     image=FUNCTION_IMAGE,
     gpu="A100-80GB",
-    timeout=TRAINING_TIMEOUT
-    + 10 * MINUTES,  # 10 extra minutes to make sure the rest of the pipeline is done
+    # 10 extra minutes to make sure the rest of the pipeline is done
+    timeout=TRAINING_TIMEOUT + 10 * MINUTES,
     # Added for debugging
     secrets=[
         modal.Secret.from_dict({"MODAL_LOGLEVEL": "DEBUG"}),
@@ -476,6 +476,7 @@ def train(  # All these args should be verified in phosphobot
     wandb_api_key: str | None,
     model_name: str,
     training_params: TrainingParamsGr00T,
+    timeout_seconds: int = TRAINING_TIMEOUT,
     **kwargs,
 ):
     from datetime import datetime, timezone
@@ -504,7 +505,7 @@ def train(  # All these args should be verified in phosphobot
             hf_token=hf_token,
             wandb_api_key=wandb_api_key,
             hf_model_name=model_name,
-            timeout_seconds=TRAINING_TIMEOUT,
+            timeout_seconds=timeout_seconds,
             batch_size=training_params.batch_size,
             epochs=training_params.epochs,
             learning_rate=training_params.learning_rate,
