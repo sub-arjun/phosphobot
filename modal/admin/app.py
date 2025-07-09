@@ -647,6 +647,15 @@ def fastapi_app():
         if user_data.data:
             user_plan = user_data.data[0].get("plan", None)
 
+        # Handle timeout based on user plan. Default to 3 hours for normal users.
+        timeout_seconds = 3 * 60 * 60  # 3 hours in seconds
+        if user_plan == "pro" or user_id in id_whitelist:
+            # Pro users or whitelisted users get a longer timeout
+            logger.info(
+                f"User {user_id} is a PRO user or whitelisted, extending timeout to 12 hours"
+            )
+            timeout_seconds = 12 * 60 * 60  # 12 hours in seconds
+
         if user_id in id_whitelist:
             logger.info(f"User {user_id} is launching a training")
             if len(active_trainings.data) >= WHITELISTED_TRAININGS_LIMIT:
@@ -712,6 +721,7 @@ def fastapi_app():
             **request.model_dump(exclude={"training_params"}),
             training_id=training_id,
             training_params=request.training_params,
+            timeout_seconds=timeout_seconds,
         )
         # Update the training row with the function_call_id
         try:

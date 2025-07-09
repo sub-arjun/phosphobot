@@ -75,7 +75,7 @@ act_image = (
 MINUTES = 60  # seconds
 HOURS = 60 * MINUTES
 FUNCTION_IMAGE = act_image
-FUNCTION_TIMEOUT_TRAINING = 3 * HOURS  # 3 hours
+FUNCTION_TIMEOUT_TRAINING = 12 * HOURS  # 12 hours
 FUNCTION_TIMEOUT_INFERENCE = 6 * MINUTES  # 6 minutes
 FUNCTION_GPU_TRAINING: list[str | modal.gpu._GPUConfig | None] = ["A10G"]
 FUNCTION_GPU_INFERENCE: list[str | modal.gpu._GPUConfig | None] = ["T4"]
@@ -323,19 +323,19 @@ async def serve(
                 nonlocal last_bbox_computed
                 nonlocal policy
 
-                assert len(current_qpos) == model_specifics.state_size[0], (
-                    f"State size mismatch: {len(current_qpos)} != {model_specifics.state_size[0]}"
-                )
-                assert len(images) <= len(model_specifics.video_keys), (
-                    f"Number of images {len(images)} is more than the number of video keys {len(model_specifics.video_keys)}"
-                )
+                assert (
+                    len(current_qpos) == model_specifics.state_size[0]
+                ), f"State size mismatch: {len(current_qpos)} != {model_specifics.state_size[0]}"
+                assert (
+                    len(images) <= len(model_specifics.video_keys)
+                ), f"Number of images {len(images)} is more than the number of video keys {len(model_specifics.video_keys)}"
                 if len(images) > 0:
-                    assert len(images[0].shape) == 3, (
-                        f"Image shape is not correct, {images[0].shape} expected (H, W, C)"
-                    )
-                    assert len(images[0].shape) == 3 and images[0].shape[2] == 3, (
-                        f"Image shape is not correct {images[0].shape} expected (H, W, 3)"
-                    )
+                    assert (
+                        len(images[0].shape) == 3
+                    ), f"Image shape is not correct, {images[0].shape} expected (H, W, C)"
+                    assert (
+                        len(images[0].shape) == 3 and images[0].shape[2] == 3
+                    ), f"Image shape is not correct {images[0].shape} expected (H, W, 3)"
 
                 with torch.no_grad(), torch.autocast(device_type="cuda"):
                     current_qpos = current_qpos.copy()
@@ -623,6 +623,7 @@ def train(  # All these args should be verified in phosphobot
     model_name: str,
     training_params: TrainingParamsAct | TrainingParamsActWithBbox,
     max_hf_download_retries: int = 3,
+    timeout_seconds: int = FUNCTION_TIMEOUT_TRAINING,
     **kwargs,
 ):
     from datetime import datetime, timezone
@@ -805,7 +806,7 @@ def train(  # All these args should be verified in phosphobot
                     training_params=training_params,
                     output_dir=str(output_dir),
                     wandb_enabled=wandb_enabled,
-                    timeout_seconds=FUNCTION_TIMEOUT_TRAINING,
+                    timeout_seconds=timeout_seconds,
                 )
             )
         except TimeoutError as te:
