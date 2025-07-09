@@ -168,8 +168,8 @@ async def run_act_training(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
-        limit=128
-        * 1024,  # 128 KB buffer size, default is 64 KB but is too small for large trainings, will make the training crash
+        # 512 KB buffer size, default is 64 KB but is too small for large trainings, will make the training crash
+        limit=512 * 1024,
     )
 
     async def read_output():

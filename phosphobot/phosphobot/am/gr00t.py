@@ -961,7 +961,8 @@ async def run_gr00t_training(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
-        limit=1024 * 128,  # 128 KB buffer size, default is 64 but seems to be too small
+        # 512 KB buffer size, default is 64 but seems to be too small
+        limit=512 * 1024,
     )
 
     output_lines = []
