@@ -435,7 +435,12 @@ class BaseDataset:
                 "lerobot_v2",
                 "lerobot_v2.1",
             ]:
-                raise ValueError("Wrong dataset path provided.")
+                raise ValueError(
+                    f"Wrong dataset path provided. Expected format: "
+                    "`/path/to/dataset_format/dataset_name` where dataset_format is one of "
+                    "`json`, `lerobot_v2`, `lerobot_v2.1`."
+                    f" Got: {path}"
+                )
 
         self.path = str(path_obj)
         self.episodes = []

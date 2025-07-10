@@ -235,10 +235,10 @@ async def play_recording(
         dataset_path = os.path.join(
             get_home_app_path(),
             "recordings",
-            recorder.episode_format,
+            query.dataset_format,
             query.dataset_name,
         )
-        dataset = BaseDataset(path=dataset_path)
+        dataset = BaseDataset(path=dataset_path, enforce_path=True)
         if len(dataset.episodes) == 0:
             raise HTTPException(
                 status_code=400,
@@ -252,11 +252,17 @@ async def play_recording(
             )
     elif query.dataset_name is not None and query.episode_id is not None:
         # Load the episode with the given ID
-        dataset = BaseDataset(path=query.dataset_name)
+        dataset_path = os.path.join(
+            get_home_app_path(),
+            "recordings",
+            query.dataset_format,
+            query.dataset_name,
+        )
+        dataset = BaseDataset(path=dataset_path, enforce_path=True)
         if query.episode_id >= len(dataset.episodes):
             raise HTTPException(
                 status_code=400,
-                detail=f"Episode with ID {query.episode_id} not found in the dataset {query.dataset_name}.",
+                detail=f"Request to play episode with ID {query.episode_id} but the dataset {query.dataset_name} has only {len(dataset.episodes)} episodes.",
             )
         episode = dataset.episodes[query.episode_id]
     elif hasattr(recorder, "episode") and recorder.episode is not None:
