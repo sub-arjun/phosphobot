@@ -148,6 +148,15 @@ class LeRobotDataset(BaseDataset):
 
     def load_episodes(self):
         """Loads all episodes from the dataset."""
+        if self.episodes_model is None:
+            # Load it
+            self.load_meta_models()
+        # if still none, raise an error
+        if self.episodes_model is None:
+            raise ValueError(
+                "EpisodesModel not initialized in LeRobotDataset. Call initialize_meta_models_if_needed first."
+            )
+
         episodes = []
         for episodes_features in self.episodes_model.episodes:
             episode = LeRobotEpisode.from_parquet(
