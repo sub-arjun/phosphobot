@@ -6,13 +6,13 @@ import numpy as np
 from loguru import logger
 
 from phosphobot.control_signal import ControlSignal
-from phosphobot.hardware import SO100Hardware, RemotePhosphobot, get_sim
+from phosphobot.hardware import SO100Hardware, PiperHardware, RemotePhosphobot, get_sim
 
 
 @dataclass
 class RobotPair:
-    leader: SO100Hardware | RemotePhosphobot
-    follower: SO100Hardware | RemotePhosphobot
+    leader: SO100Hardware | PiperHardware | RemotePhosphobot
+    follower: SO100Hardware | PiperHardware | RemotePhosphobot
 
 
 async def leader_follower_loop(
