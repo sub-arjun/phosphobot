@@ -15,6 +15,7 @@ from phosphobot.utils import is_running_on_linux, get_resources_path
 
 class PiperHardware(BaseManipulator):
     name = "agilex-piper"
+    device_name = "agilex-piper"
 
     URDF_FILE_PATH = str(
         get_resources_path() / "urdf" / "piper" / "urdf" / "piper.urdf"
@@ -249,7 +250,7 @@ class PiperHardware(BaseManipulator):
         Each position is mapped to an angle.
         """
         # Get current position
-        current_position = self.read_joints_position(unit="motor_units", source="sim")
+        current_position = self.read_joints_position(unit="motor_units", source="robot")
         # Write the new position
         current_position[servo_id - 1] = units
 

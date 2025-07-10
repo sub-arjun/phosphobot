@@ -51,6 +51,7 @@ from phosphobot.robot import (
     RemotePhosphobot,
     RobotConnectionManager,
     SO100Hardware,
+    PiperHardware,
     get_rcm,
 )
 from phosphobot.supabase import get_client, user_is_logged_in
@@ -794,6 +795,7 @@ async def start_leader_follower(
         else:
             valid_robot_types = (
                 SO100Hardware,
+                PiperHardware,
                 RemotePhosphobot,
             )
             if not isinstance(leader, valid_robot_types):

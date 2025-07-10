@@ -825,7 +825,12 @@ def get_local_subnet() -> str | None:
         None: If no valid subnet is found.
     """
     for iface in netifaces.interfaces():
-        addrs = netifaces.ifaddresses(iface)
+        try:
+            addrs = netifaces.ifaddresses(iface)
+        except Exception as e:
+            logger.debug(f"Error getting addresses for interface {iface}: {e}")
+            logger.debug(f"Is the robot powered?")
+            continue
         if netifaces.AF_INET in addrs:
             for addr_info in addrs[netifaces.AF_INET]:
                 ip = addr_info.get("addr")

@@ -498,6 +498,36 @@ class BaseManipulator(BaseRobot):
                 max_num_iterations=250,
                 residual_threshold=1e-9,
             )
+        # elif self.name == "agilex-piper":
+        #     # The robot has 7 joints, we map the rx coordinate to the last joint directly
+        #     # This prevents errors in the inverse kinematics that move the robot around
+        #     target_orientation_rad = euler_from_quaternion(
+        #         target_orientation_quaternions, degrees=False
+        #     )
+        #     rx = target_orientation_rad[0]
+        #     target_orientation_rad[0] = 0  # We don't use the rx coordinate in the IK
+        #     target_orientation_quaternions = R.from_euler(
+        #         "xyz", target_orientation_rad
+        #     ).as_quat()
+
+        #     target_q_rad = self.sim.inverse_kinematics(
+        #         robot_id=self.p_robot_id,
+        #         end_effector_link_index=self.END_EFFECTOR_LINK_INDEX,
+        #         target_position=target_position_cartesian,
+        #         target_orientation=target_orientation_quaternions,
+        #         rest_poses=[0] * len(self.lower_joint_limits),
+        #         joint_damping=[0.001] * len(self.lower_joint_limits),
+        #         lower_limits=self.lower_joint_limits,
+        #         upper_limits=self.upper_joint_limits,
+        #         joint_ranges=[
+        #             abs(up - low)
+        #             for up, low in zip(self.upper_joint_limits, self.lower_joint_limits)
+        #         ],
+        #         max_num_iterations=180,
+        #         residual_threshold=1e-6,
+        #     )
+        #     target_q_rad = list(target_q_rad)
+        #     target_q_rad[5] = rx  # Set the rx coordinate
         else:
             # We removed the limits because they made the inverse kinematics fail.
             # The robot couldn't go to its left.
