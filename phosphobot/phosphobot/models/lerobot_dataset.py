@@ -146,6 +146,19 @@ class LeRobotDataset(BaseDataset):
 
         logger.debug("Meta models initialization/loading complete.")
 
+    def load_episodes(self):
+        """Loads all episodes from the dataset."""
+        episodes = []
+        for episodes_features in self.episodes_model.episodes:
+            episode = LeRobotEpisode.from_parquet(
+                self.get_episode_data_path(episodes_features.episode_index),
+                format=self.format_version,
+                dataset_path=self.data_folder_full_path,
+            )
+            episode.dataset_manager = self
+            episodes.append(episode)
+        self.episodes = episodes
+
     def get_next_episode_index(self) -> int:
         if self.info_model is None:
             raise ValueError(

@@ -543,7 +543,7 @@ class RecordingPlayRequest(BaseModel):
     Request to play a recorded episode.
     """
 
-    dataset_format: Literal["lerobot_v2", "lerobot_v2.1", "json"] = Field(
+    dataset_format: Literal["lerobot_v2", "lerobot_v2.1"] = Field(
         "lerobot_v2.1",
         description="Format of the dataset to play. This is used to determine how to read the episode data.",
     )

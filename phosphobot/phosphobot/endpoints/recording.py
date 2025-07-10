@@ -21,6 +21,7 @@ from phosphobot.models import (
     StatusResponse,
 )
 from phosphobot.models import InfoModel
+from phosphobot.models.lerobot_dataset import LeRobotDataset
 from phosphobot.posthog import is_github_actions
 from phosphobot.recorder import Recorder, get_recorder
 from phosphobot.robot import RobotConnectionManager, get_rcm
@@ -238,7 +239,8 @@ async def play_recording(
             query.dataset_format,
             query.dataset_name,
         )
-        dataset = BaseDataset(path=dataset_path, enforce_path=True)
+        dataset = LeRobotDataset(path=dataset_path, enforce_path=True)
+        dataset.load_episodes()
         if len(dataset.episodes) == 0:
             raise HTTPException(
                 status_code=400,
@@ -258,7 +260,8 @@ async def play_recording(
             query.dataset_format,
             query.dataset_name,
         )
-        dataset = BaseDataset(path=dataset_path, enforce_path=True)
+        dataset = LeRobotDataset(path=dataset_path, enforce_path=True)
+        dataset.load_episodes()
         if query.episode_id >= len(dataset.episodes):
             raise HTTPException(
                 status_code=400,
