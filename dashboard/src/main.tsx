@@ -12,6 +12,7 @@ createRoot(document.getElementById("root")!).render(
       defaultTheme="system"
       enableSystem
       disableTransitionOnChange
+      storageKey="theme"
     >
       <AuthProvider>
         <App />
