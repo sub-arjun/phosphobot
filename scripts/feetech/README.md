@@ -45,7 +45,7 @@ You can also use `phosphobot info` to do that.
 
 ```bash
 uv run configure_motor.py \
-  --port /dev/cu.usbmodem58FA0823771 \
+  --port /dev/tty.usbmodem58FA0960801 \
   --brand feetech \
   --model sts3215 \
   --baudrate 1000000 \
