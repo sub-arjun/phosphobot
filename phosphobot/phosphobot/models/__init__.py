@@ -192,6 +192,8 @@ class AppControlData(BaseModel):
         # Pitch axis is inverted in RollPitchYaw: https://simple.wikipedia.org/wiki/Pitch,_yaw,_and_roll
         if robot_name == "wx-250s" or robot_name == "koch-v1.1":
             orientation = np.array([-self.rx, -self.rz, -self.ry])
+        if robot_name == "agilex-piper":
+            orientation = np.array([self.ry, self.rx, self.rz])
         else:  # SO-100 configuration
             orientation = np.array([-self.rx, -self.rz, -self.ry])
 

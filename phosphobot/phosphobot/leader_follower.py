@@ -6,13 +6,13 @@ import numpy as np
 from loguru import logger
 
 from phosphobot.control_signal import ControlSignal
-from phosphobot.hardware import SO100Hardware, RemotePhosphobot, get_sim
+from phosphobot.hardware import SO100Hardware, PiperHardware, RemotePhosphobot, get_sim
 
 
 @dataclass
 class RobotPair:
-    leader: SO100Hardware | RemotePhosphobot
-    follower: SO100Hardware | RemotePhosphobot
+    leader: SO100Hardware | PiperHardware | RemotePhosphobot
+    follower: SO100Hardware | PiperHardware | RemotePhosphobot
 
 
 async def leader_follower_loop(
@@ -55,19 +55,20 @@ async def leader_follower_loop(
         follower.enable_torque()
         if not enable_gravity_compensation:
             leader.disable_torque()
-            p_gains = [12, 12, 12, 12, 12, 12]
-            d_gains = [32, 32, 32, 32, 32, 32]
-            default_p_gains = [12, 20, 20, 20, 20, 20]
-            default_d_gains = [36, 36, 36, 32, 32, 32]
+            if isinstance(follower, SO100Hardware):
+                p_gains = [12, 12, 12, 12, 12, 12]
+                d_gains = [32, 32, 32, 32, 32, 32]
+                default_p_gains = [12, 20, 20, 20, 20, 20]
+                default_d_gains = [36, 36, 36, 32, 32, 32]
 
-            for i in range(6):
-                follower._set_pid_gains_motors(
-                    servo_id=i + 1,
-                    p_gain=p_gains[i],
-                    i_gain=0,
-                    d_gain=d_gains[i],
-                )
-                await asyncio.sleep(0.05)
+                for i in range(6):
+                    follower._set_pid_gains_motors(
+                        servo_id=i + 1,
+                        p_gain=p_gains[i],
+                        i_gain=0,
+                        d_gain=d_gains[i],
+                    )
+                    await asyncio.sleep(0.05)
         else:
             assert isinstance(leader, SO100Hardware), (
                 "Gravity compensation is only supported for SO100Hardware."
@@ -192,14 +193,15 @@ async def leader_follower_loop(
         follower = pair.follower
 
         leader.enable_torque()
-        for i in range(6):
-            leader._set_pid_gains_motors(
-                servo_id=i + 1,
-                p_gain=default_p_gains[i],
-                i_gain=0,
-                d_gain=default_d_gains[i],
-            )
-            await asyncio.sleep(0.05)
+        if isinstance(leader, SO100Hardware):
+            for i in range(6):
+                leader._set_pid_gains_motors(
+                    servo_id=i + 1,
+                    p_gain=default_p_gains[i],
+                    i_gain=0,
+                    d_gain=default_d_gains[i],
+                )
+                await asyncio.sleep(0.05)
 
         # Disable torque
         leader.disable_torque()
