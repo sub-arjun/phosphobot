@@ -6,6 +6,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import {
   BrainCircuit,
   Camera,
@@ -156,6 +157,16 @@ export function MobileMenu() {
               <Network className="h-4 w-4" />
               Network Management
             </a>
+          </div>
+
+          <div className="space-y-1">
+            <h3 className="text-sm font-medium text-muted-foreground px-2">
+              Preferences
+            </h3>
+            <div className="flex items-center gap-3 px-2 py-1.5">
+              <ThemeToggle />
+              <span className="text-sm">Theme</span>
+            </div>
           </div>
         </div>
       </SheetContent>
