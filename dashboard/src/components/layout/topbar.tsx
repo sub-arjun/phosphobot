@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import {
   Tooltip,
   TooltipContent,
@@ -202,6 +203,7 @@ export function TopBar() {
             Documentation
           </a>
         </Button>
+        <ThemeToggle />
         <div className="flex items-center gap-2">
           {session ? (
             <DropdownMenu>
