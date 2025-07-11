@@ -110,11 +110,11 @@ export const AutoComplete = ({
       <div className="relative mt-1">
         <div
           className={cn(
-            "animate-in fade-in-0 zoom-in-95 absolute top-0 z-10 w-full rounded-xl bg-primary outline-none",
+            "animate-in fade-in-0 zoom-in-95 absolute top-0 z-10 w-full rounded-xl outline-none",
             isOpen ? "block" : "hidden",
           )}
         >
-          <CommandList className="rounded-lg ring-1 bg-muted-foreground">
+          <CommandList className="rounded-lg ring-1 bg-card">
             {isLoading && <CommandLoading isLoading={isLoading} />}
 
             {options.length > 0 && (
