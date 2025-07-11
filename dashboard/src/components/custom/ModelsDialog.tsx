@@ -358,7 +358,7 @@ export const ModelsDialog: React.FC<ModelsDialogProps> = ({
         ) : (
           <div className="max-h-[50vh] overflow-auto border rounded-md">
             <Table>
-              <TableHeader className="sticky top-0 bg-white z-10">
+              <TableHeader className="sticky top-0 z-10">
                 <TableRow>
                   <TableHead>Status</TableHead>
                   <TableHead>Model Name</TableHead>
@@ -539,7 +539,7 @@ export const ModelsCard: React.FC = () => {
         ) : (
           <div className="max-h-[50vh] overflow-auto border rounded-md">
             <Table>
-              <TableHeader className="sticky top-0 bg-white z-10">
+              <TableHeader className="sticky top-0 z-10">
                 <TableRow>
                   <TableHead>Status</TableHead>
                   <TableHead>Model Name</TableHead>
