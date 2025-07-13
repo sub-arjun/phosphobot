@@ -1,6 +1,6 @@
 # Pybullet simulation server
 
-Run the pybullet simulation server with [uv](<(https://github.com/astral-sh/uv)>). It's only used when running simulation in GUI mode.
+Run the pybullet simulation server with [uv](<(https://github.com/astral-sh/uv)>). It's only used when running simulation in GUI mode. It uses `python=3.8`. Older versions of Python have bugs where you can't click on the Pybullet window.
 
 ## How to run ?
 
@@ -35,4 +35,4 @@ cd ..
 make sim
 ```
 
-4. In a new terminal, you can now run the main `teleop` server, which handles the controller logic.
+4. In a new terminal, you can now run the main `phosphobot` server, which handles the controller logic.

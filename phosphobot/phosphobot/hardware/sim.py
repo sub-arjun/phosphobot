@@ -47,7 +47,6 @@ class PyBulletSimulation:
                     "..",
                     "..",
                     "..",
-                    "..",
                     "simulation",
                     "pybullet",
                 )

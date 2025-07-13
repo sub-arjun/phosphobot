@@ -96,4 +96,4 @@ submodule:
 	git submodule update --init --recursive
 
 
-.PHONY: all sim dev prod stop stop_hard dataset_annotate dataset_convert dataset_push robot_watch test_server build clean_build build_pyinstaller run_bin run_bin_test info_bin
+.PHONY: all dev prod stop stop_hard dataset_annotate dataset_convert dataset_push robot_watch test_server build clean_build build_pyinstaller run_bin run_bin_test info_bin
