@@ -4,6 +4,8 @@ PyBullet Simulation wrapper class
 
 import os
 import subprocess
+import sys
+import threading
 import time
 
 import pybullet as p
@@ -51,9 +53,32 @@ class PyBulletSimulation:
                     "pybullet",
                 )
             )
-            subprocess.Popen(
-                ["uv", "run", "--python", "3.8", "main.py"], cwd=absolute_path
+
+            def _stream_to_console(pipe):
+                """Continuously read from *pipe* and write to stdout."""
+                try:
+                    with pipe:
+                        for line in iter(pipe.readline, b""):
+                            # decode bytes -> str and write to the console
+                            sys.stdout.write(
+                                "[gui sim] " + line.decode("utf-8", errors="replace")
+                            )
+                            sys.stdout.flush()
+                except Exception as exc:
+                    logger.warning(f"Error while reading child stdout: {exc}")
+
+            self._gui_proc = subprocess.Popen(
+                ["uv", "run", "--python", "3.8", "main.py"],
+                cwd=absolute_path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,  # merge stderr into stdout
+                bufsize=0,
             )
+            t = threading.Thread(
+                target=_stream_to_console, args=(self._gui_proc.stdout,), daemon=True
+            )
+            t.start()
+
             # Wait for 1 second to allow the simulation to start
             time.sleep(1)
             p.connect(p.SHARED_MEMORY)
@@ -73,7 +98,14 @@ class PyBulletSimulation:
             logger.info("Simulation disconnected")
 
         if self.sim_mode == "gui":
+            if hasattr(self, "_gui_proc") and self._gui_proc.poll() is None:
+                self._gui_proc.terminate()
+                try:
+                    self._gui_proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    self._gui_proc.kill()
             # Kill the simulation process: any instance of python 3.8
+            # A bit invasive. Can we do something better?
             subprocess.run(["pkill", "-f", "python3.8"])
 
     def __del__(self):

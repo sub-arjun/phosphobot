@@ -1,8 +1,16 @@
+import time
+import sys
 import pybullet as p
 import pybullet_data
 
+print(
+    f"Starting PyBullet simulation in GUI mode. Python version: {sys.version} (recommended: Python 3.8)"
+)
+
 # Connect to PyBullet
 p.connect(p.GUI_SERVER)
+time.sleep(1)  # Wait for the GUI to initialize
+
 p.resetDebugVisualizerCamera(
     cameraDistance=0.5,  # Distance of the camera from the target.
     cameraYaw=150,  # Rotation around the target (left/right).
