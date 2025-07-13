@@ -310,6 +310,29 @@ class SO100Hardware(BaseManipulator):
             logger.warning(f"Error reading motor voltage for servo {servo_id}: {e}")
             self.update_motor_errors()
             return None
+    
+    def read_motor_temperature(self, servo_id: int, **kwargs) -> tuple[float,float] | None:
+        """
+        Read the temperature of a Feetech servo.
+        """
+        if not self.is_connected:
+            return None
+        try:
+            present_temperature = self.motors_bus.read(
+                "Present_Temperature",
+                motor_names=self.servo_id_to_motor_name[servo_id],
+            )
+            maximum_temperature = self.motors_bus.read(
+                "Max_Temperature_Limit",
+                motor_names=self.servo_id_to_motor_name[servo_id],
+            )
+            self.motor_communication_errors = 0
+            # Extract scalar values from NumPy arrays
+            return (float(present_temperature.item()), float(maximum_temperature.item()))  # unit is Celsius
+        except Exception as e:
+            logger.warning(f"Error reading motor temperature for servo {servo_id}: {e}")
+            self.update_motor_errors()
+            return None
 
     async def calibrate(self) -> tuple[Literal["success", "in_progress", "error"], str]:
         """

@@ -126,6 +126,15 @@ class BaseManipulator(BaseRobot):
         raise: Exception if the routine has not been implemented
         """
         raise NotImplementedError("The robot enable torque must be implemented.")
+    
+    @abstractmethod
+    def read_motor_temperature(self, servo_id: int) -> tuple[float,float] | None:
+        """
+        Read the temperature of a motor
+
+        raise: Exception if the routine has not been implemented
+        """
+        raise NotImplementedError("The robot read motor temeprature must be implemented.")
 
     @abstractmethod
     def write_motor_position(self, servo_id: int, units: int, **kwargs) -> None:
@@ -1141,7 +1150,31 @@ class BaseManipulator(BaseRobot):
 
         # If the robot is not connected, error raised
         return None
+    
+    def current_temperature(self) -> np.ndarray | None:
+        """
+        Read the current and maximum temperature of the joints of the robot.
 
+        Returns:
+            np.ndarray: A 2D array of shape (n_joints, 2) where each row is
+                        [current_temperature, maximum_temperature] for a joint.
+        """
+        if self.is_connected:
+            num_joints = len(self.SERVO_IDS)
+            current_temperatures = np.full((num_joints, 2), None)  # Use None for unavailable values
+
+            for i, servo_id in enumerate(self.SERVO_IDS):
+                temps = self.read_motor_temperature(servo_id)
+                if temps is not None:
+                    # print("="*50,temps)
+                    # print("="*50)
+                    current_temperatures[i] = temps  # temps is a tuple: (current, max)
+
+            return current_temperatures
+        
+        # If the robot is not connected, error raised
+        return None
+    
     def is_powered_on(self) -> bool:
         """
         Return True if all voltage readings are above 0.1V and successful
