@@ -69,7 +69,6 @@ async def lifespan(app: FastAPI):
     udp_server = get_udp_server()
     # Initialize pybullet simulation
     sim = get_sim()
-    sim.init_simulation()
     # Initialize rcm
     rcm = get_rcm()
 

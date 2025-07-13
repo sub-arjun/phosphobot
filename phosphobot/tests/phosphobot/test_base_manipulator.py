@@ -30,8 +30,7 @@ def robot(request):
     """
     # Initialize the simulation
     config.SIM_MODE = SimulationMode.headless
-    sim = get_sim()
-    sim.init_simulation()
+    get_sim()
 
     return request.getfixturevalue(request.param)
 
@@ -70,12 +69,12 @@ async def test_inverse_kinematics(robot: BaseManipulator):
     position = robot.initial_position
     orientation = robot.initial_orientation_rad
 
-    assert position is not None, (
-        "Initial position should not be None after initialization"
-    )
-    assert orientation is not None, (
-        "Initial orientation should not be None after initialization"
-    )
+    assert (
+        position is not None
+    ), "Initial position should not be None after initialization"
+    assert (
+        orientation is not None
+    ), "Initial orientation should not be None after initialization"
 
     q_robot_reference_rad = robot.read_joints_position()
     logger.info(f"q_robot_reference_rad: {q_robot_reference_rad}")
@@ -83,9 +82,9 @@ async def test_inverse_kinematics(robot: BaseManipulator):
     q_robot_rad = robot.inverse_kinematics(position, orientation)
     logger.info(f"q_robot_rad: {q_robot_rad}")
 
-    assert np.allclose(q_robot_rad, q_robot_reference_rad, rtol=0, atol=1e-3), (
-        "The angles should be the same"
-    )
+    assert np.allclose(
+        q_robot_rad, q_robot_reference_rad, rtol=0, atol=1e-3
+    ), "The angles should be the same"
 
 
 @pytest.mark.parametrize("robot", ["koch", "so100"], indirect=True)
@@ -104,9 +103,9 @@ def test_forward_inverse_kinematics(robot: BaseManipulator):
     logger.info(f"q_robot_rad: {q_robot_rad}")
     logger.info(f"q_robot_rad_reference: {q_robot_rad_reference}")
 
-    assert np.allclose(q_robot_rad, q_robot_rad_reference, rtol=0, atol=1e-6), (
-        "The angles should be the same"
-    )
+    assert np.allclose(
+        q_robot_rad, q_robot_rad_reference, rtol=0, atol=1e-6
+    ), "The angles should be the same"
 
 
 @pytest.mark.parametrize("robot", ["koch", "so100"], indirect=True)
