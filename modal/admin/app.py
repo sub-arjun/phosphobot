@@ -523,13 +523,14 @@ def fastapi_app():
                         }
                     ).eq("id", row["id"]).execute()
                     # Kill the modal function
-                    try:
-                        modal.FunctionCall.from_id(
-                            row["modal_function_call_id"]
-                        ).cancel()
-                    except Exception as e:
-                        logger.error(f"Error cancelling modal function: {e}")
-                        # We can ignore this error, the server will be restarted anyway
+                    # TODO: we can't do that because the modal_function_call_id is not stored.
+                    # try:
+                    #     modal.FunctionCall.from_id(
+                    #         row["modal_function_call_id"]
+                    #     ).cancel()
+                    # except Exception as e:
+                    #     logger.error(f"Error cancelling modal function: {e}")
+                    #     # We can ignore this error, the server will be restarted anyway
 
                     raise HTTPException(
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
