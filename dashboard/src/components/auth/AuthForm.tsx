@@ -18,9 +18,9 @@ export function AuthForm() {
 
   // Determine the title based on the current path
   const getTitle = () => {
-    if (location.pathname === "/sign-in") {
+    if (location.pathname.includes("sign-in")) {
       return "Sign In";
-    } else if (location.pathname === "/sign-up") {
+    } else if (location.pathname.includes("sign-up")) {
       return "Sign Up";
     } else {
       return "Get Started";
@@ -31,27 +31,38 @@ export function AuthForm() {
     e.preventDefault();
     setIsLoading(true);
 
-    try {
-      await login(email, password);
-      toast.success("Logged in successfully!");
-      navigate(from, { replace: true });
-    } catch (loginErr) {
-      if (loginErr instanceof Error && loginErr.message === "Login failed") {
-        try {
-          await signup(email, password);
-          toast.success(
-            "Account created! Please check your email for confirmation.",
-          );
-        } catch (signupErr) {
-          console.error(signupErr);
-          toast.error("Signup failed. Please try again.");
-        }
-      } else {
-        console.error(loginErr);
-        toast.error("An error occurred. Please check your credentials.");
-      }
-    } finally {
+    if (!email || !password) {
+      toast.error("Email and password are required.");
       setIsLoading(false);
+      return;
+    }
+
+    if (location.pathname.includes("sign-up")) {
+      try {
+        await signup(email, password);
+        toast.success(
+          "Account created! Please check your email for confirmation link.",
+        );
+        navigate("/sign-in", { replace: true });
+      } catch (signupErr) {
+        console.error(signupErr);
+        toast.error(`Signup failed: ${signupErr || "Unknown error"}`);
+      }
+      setIsLoading(false);
+      return;
+    }
+
+    if (location.pathname.includes("sign-in")) {
+      try {
+        await login(email, password);
+        toast.success("Logged in successfully!");
+        navigate(from, { replace: true });
+      } catch (loginErr) {
+        console.error(loginErr);
+        toast.error(`Login failed: ${loginErr || "Unknown error"}`);
+      }
+      setIsLoading(false);
+      return;
     }
   };
 
@@ -104,7 +115,7 @@ export function AuthForm() {
           <p className="text-sm text-muted-foreground text-center">
             <a
               href="/auth/forgot-password"
-              className="text-green-500 hover:underline"
+              className="underline cursor-pointer"
             >
               Forgot Password?
             </a>

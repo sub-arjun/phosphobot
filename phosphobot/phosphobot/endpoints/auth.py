@@ -115,11 +115,11 @@ async def signin(
         )
         if response.session is None:
             # If no session is returned, it means the user is not authenticated
-            raise HTTPException(status_code=401, detail="Invalid email or password.")
+            raise HTTPException(status_code=401, detail="Session not found.")
         if response.user is None:
-            raise HTTPException(status_code=401, detail="Invalid email or password.")
+            raise HTTPException(status_code=401, detail="User not found.")
         if response.user.email is None:
-            raise HTTPException(status_code=400, detail="Email is required for signin.")
+            raise HTTPException(status_code=400, detail="User email not found.")
         # If signin succeeds, response.session will be present
         session = Session(
             user_id=response.user.id,
