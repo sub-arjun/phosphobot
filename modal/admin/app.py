@@ -507,7 +507,35 @@ def fastapi_app():
             # Return the existing server info into a ServerInfo object
             # if it's the same model_id
             row = active_servers.data[0]
-            if row["region"] is None:
+
+            if row["status"] == "running" and row["region"] is None:
+                # If it has been more than 5 minutes, we can assume there was an error
+                # and we can restart the server
+                if (
+                    datetime.now(timezone.utc)
+                    - datetime.fromisoformat(row["requested_at"])
+                ).total_seconds() > 5 * MINUTES:
+                    # Restart the server
+                    supabase_client.table("servers").update(
+                        {
+                            "status": "stopped",
+                            "terminated_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    ).eq("id", row["id"]).execute()
+                    # Kill the modal function
+                    try:
+                        modal.FunctionCall.from_id(
+                            row["modal_function_call_id"]
+                        ).cancel()
+                    except Exception as e:
+                        logger.error(f"Error cancelling modal function: {e}")
+                        # We can ignore this error, the server will be restarted anyway
+
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="There has been an error with the server. Please try again and reach out on Discord if it persists.",
+                    )
+
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Server is warming up... please wait and try again",
