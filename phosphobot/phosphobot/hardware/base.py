@@ -9,7 +9,7 @@ from fastapi import HTTPException
 import numpy as np
 from loguru import logger
 from phosphobot.configs import config as cfg
-from phosphobot.models import BaseRobot, BaseRobotConfig, BaseRobotInfo
+from phosphobot.models import BaseRobot, BaseRobotConfig, BaseRobotInfo, Temperature
 from phosphobot.models.lerobot_dataset import FeatureDetails
 from phosphobot.hardware import get_sim
 from scipy.spatial.transform import Rotation as R  # type: ignore
@@ -1151,28 +1151,29 @@ class BaseManipulator(BaseRobot):
         # If the robot is not connected, error raised
         return None
     
-    def current_temperature(self) -> np.ndarray | None:
+    def current_temperature(self) -> List[Temperature] | None:
         """
         Read the current and maximum temperature of the joints of the robot.
-
         Returns:
-            np.ndarray: A 2D array of shape (n_joints, 2) where each row is
-                        [current_temperature, maximum_temperature] for a joint.
+            List[Temperature] | None: A list of Temperature objects, one for each joint,
+                                    or None if the robot is not connected.
         """
         if self.is_connected:
-            num_joints = len(self.SERVO_IDS)
-            current_temperatures = np.full((num_joints, 2), None)  # Use None for unavailable values
-
-            for i, servo_id in enumerate(self.SERVO_IDS):
+            temperatures = []
+            for servo_id in self.SERVO_IDS:
                 temps = self.read_motor_temperature(servo_id)
                 if temps is not None:
-                    
-                    current_temperatures[i] = temps  # temps is a tuple: (current, max)
-
-            return current_temperatures
+                    # temps is a tuple: (current, max)
+                    temperature = Temperature(current=temps[0], max=temps[1])
+                    temperatures.append(temperature)
+                else:
+                    temperature = Temperature(current=None, max=None)  # or handle differently
+                    temperatures.append(temperature)
+            return temperatures
         
-        # If the robot is not connected, error raised
+        # If the robot is not connected, return None
         return None
+
     
     def is_powered_on(self) -> bool:
         """

@@ -570,7 +570,7 @@ async def read_temperature(
     temperature = robot.current_temperature()
 
     return TemperatureReadResponse(
-        current_max_Temperature=temperature.tolist() if temperature is not None else None,
+        current_max_Temperature=temperature,
     )
 
 @router.post(

@@ -319,7 +319,7 @@ class SO100Hardware(BaseManipulator):
         return RobotConfigStatus(
             name=self.name,
             device_name=getattr(self, "SERIAL_ID", None),
-            temperature_current_max_list=temperature.tolist() if temperature is not None else None
+            temperature_current_max_list=temperature
         )
     
     def read_motor_temperature(self, servo_id: int, **kwargs) -> tuple[float,float] | None:

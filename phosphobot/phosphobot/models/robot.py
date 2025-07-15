@@ -12,6 +12,9 @@ from phosphobot.utils import get_home_app_path
 
 DEFAULT_FILE_ENCODING = "utf-8"
 
+class Temperature(BaseModel):
+    current: float | None
+    max: float | None
 
 class RobotConfigStatus(BaseModel):
     """
@@ -21,7 +24,7 @@ class RobotConfigStatus(BaseModel):
     name: str
     robot_type: Literal["manipulator", "mobile", "other"] = "manipulator"
     device_name: str | None
-    temperature_current_max_list : List[List[float | None]] | None = None
+    temperature_current_max_list : List[Temperature] | None = None
 
 
 class BaseRobot(ABC):

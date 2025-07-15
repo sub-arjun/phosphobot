@@ -69,19 +69,23 @@ function RobotStatusMenuItem({
 
   // Calculate temperature info
   const getTemperatureInfo = () => {
-    if (!robot.temperature_current_max_list) return null;
+    if (!robot.temperature_current_max_list || robot.temperature_current_max_list.length === 0) return null;
     
-    const validTemps = robot.temperature_current_max_list
-      .filter(([current]) => current !== null)
-      .map(([current, max]) => ({ current: current!, max }));
+    const validTemps = robot.temperature_current_max_list.filter(temp => 
+      temp.current !== null && temp.max !== null
+    );
     
-    if (validTemps.length === 0) return null;
+    let maxTemp = null;
+    let hasOverheat = false;
+    let hasWarning = false;
     
-    const maxTemp = Math.max(...validTemps.map(t => t.current));
-    const hasOverheat = validTemps.some(t => t.max !== null && t.current >= t.max - 5);
-    const hasWarning = validTemps.some(t => t.max !== null && t.current >= t.max - 15 && t.current <= t.max - 5);
+    if (validTemps.length > 0) {
+      maxTemp = Math.max(...validTemps.map(t => t.current!));
+      hasOverheat = validTemps.some(t => t.current! >= t.max! - 5);
+      hasWarning = validTemps.some(t => t.current! >= t.max! - 15 && t.current! < t.max! - 5);
+    }
     
-    return { maxTemp, hasOverheat, hasWarning };
+    return { maxTemp, hasOverheat, hasWarning, hasAnyData: robot.temperature_current_max_list.length > 0 };
   };
 
   const temperatureInfo = getTemperatureInfo();
@@ -154,7 +158,7 @@ function RobotStatusMenuItem({
                 {robot.device_name}
               </div>
             )}
-            {temperatureInfo && (
+            {temperatureInfo && temperatureInfo.hasAnyData && (
               <div className={`text-xs flex items-center gap-1 ${
                 temperatureInfo.hasOverheat 
                   ? 'text-red-500 animate-pulse' 
@@ -162,7 +166,7 @@ function RobotStatusMenuItem({
                   ? 'text-orange-500' 
                   : 'text-muted-foreground'
               }`}>
-                <span>Motor temperature: {temperatureInfo.maxTemp.toFixed(1)}°C</span>
+                <span>Motor temperature: {temperatureInfo.maxTemp !== null ? `${temperatureInfo.maxTemp.toFixed(1)}°C` : 'N/A'}</span>
                 {temperatureInfo.hasOverheat && (
                   <AlertTriangle className="size-3 text-red-500" />
                 )}
@@ -227,7 +231,7 @@ function RobotStatusMenuItem({
           <Moon className="size-4" />
           <span>Move to sleep</span>
         </DropdownMenuItem>
-        {robot.temperature_current_max_list && (
+        {robot.temperature_current_max_list && robot.temperature_current_max_list.length > 0 && (
           <>
             <DropdownMenuSeparator />
             <div
@@ -267,9 +271,9 @@ function RobotStatusMenuItem({
                   isTemperatureExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
                 }`}
               >
-                {robot.temperature_current_max_list.map(([current, max], index) => {
-                  const isOverheating = current !== null && max !== null && current >= max - 5;
-                  const isWarning = current !== null && max !== null && current >= max - 15 && current <= max -5;
+                {robot.temperature_current_max_list.map((temperature, index) => {
+                  const isOverheating = temperature.current !== null && temperature.max !== null && temperature.current >= temperature.max - 5;
+                  const isWarning = temperature.current !== null && temperature.max !== null && temperature.current >= temperature.max - 15 && temperature.current < temperature.max - 5;
                   return (
                     <DropdownMenuItem 
                       key={index} 
@@ -283,8 +287,8 @@ function RobotStatusMenuItem({
                       onClick={(e) => e.preventDefault()}
                     >
                       <span className="text-sm">
-                        Motor {index + 1}: {current !== null ? `${current.toFixed(1)}°C` : 'N/A'}
-                        {max !== null && ` / ${max.toFixed(1)}°C`}
+                        Motor {index + 1}: {temperature.current !== null ? `${temperature.current.toFixed(1)}°C` : 'N/A'}
+                        {temperature.max !== null && ` / ${temperature.max.toFixed(1)}°C`}
                         {isOverheating && (
                           <AlertTriangle className="inline size-3 ml-1 text-red-500" />
                         )}
@@ -390,12 +394,12 @@ export function RobotStatusDropdown() {
       let hasWarning = false;
       
       if (robot.temperature_current_max_list) {
-        robot.temperature_current_max_list.forEach(([current, max]) => {
-          if (current === null || max === null) return;
+        robot.temperature_current_max_list.forEach((temperature) => {
+          if (temperature.current === null || temperature.max === null) return;
           
-          if (current >= max - 5) {
+          if (temperature.current >= temperature.max - 5) {
             hasOverheating = true;
-          } else if (current >= max - 15) {
+          } else if (temperature.current >= temperature.max - 15) {
             hasWarning = true;
           }
         });
@@ -446,12 +450,12 @@ export function RobotStatusDropdown() {
     serverStatus.robot_status.forEach(robot => {
       if (!robot.temperature_current_max_list) return;
       
-      robot.temperature_current_max_list.forEach(([current, max]) => {
-        if (current === null || max === null) return;
+      robot.temperature_current_max_list.forEach((temperature) => {
+        if (temperature.current === null || temperature.max === null) return;
         
-        if (current >= max - 5) {
+        if (temperature.current >= temperature.max - 5) {
           hasOverheating = true;
-        } else if (current >= max - 15) {
+        } else if (temperature.current >= temperature.max - 15) {
           hasWarning = true;
         }
       });
@@ -506,16 +510,14 @@ export function RobotStatusDropdown() {
                 {serverStatus.robot_status.map((robot, index) => {
                   // Calculate temperature status for this specific robot
                   const robotTemperatureInfo = (() => {
-                    if (!robot.temperature_current_max_list) return null;
+                    if (!robot.temperature_current_max_list || robot.temperature_current_max_list.length === 0) return null;
                     
-                    const validTemps = robot.temperature_current_max_list
-                      .filter(([current]) => current !== null)
-                      .map(([current, max]) => ({ current: current!, max }));
-                    
-                    if (validTemps.length === 0) return null;
-                    
-                    const hasOverheat = validTemps.some(t => t.max !== null && t.current >= t.max - 5);
-                    const hasWarning = validTemps.some(t => t.max !== null && t.current >= t.max - 15 && t.current <= t.max - 5);
+                    const hasOverheat = robot.temperature_current_max_list.some(t => 
+                      t.current !== null && t.max !== null && t.current >= t.max - 5
+                    );
+                    const hasWarning = robot.temperature_current_max_list.some(t => 
+                      t.current !== null && t.max !== null && t.current >= t.max - 15 && t.current < t.max - 5
+                    );
                     
                     return { hasOverheat, hasWarning };
                   })();
