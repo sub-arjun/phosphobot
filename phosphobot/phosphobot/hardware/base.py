@@ -1158,7 +1158,7 @@ class BaseManipulator(BaseRobot):
                     temperature = Temperature(current=temps[0], max=temps[1])
                     temperatures.append(temperature)
                 else:
-                    temperature = Temperature(current=None, max=None)  # or handle differently
+                    temperature = Temperature(current=None, max=None)  
                     temperatures.append(temperature)
             return temperatures
         
