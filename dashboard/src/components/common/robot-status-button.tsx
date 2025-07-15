@@ -234,9 +234,33 @@ function RobotStatusMenuItem({
               onMouseEnter={() => setIsTemperatureExpanded(true)}
               onMouseLeave={() => setIsTemperatureExpanded(false)}
             >
-              <DropdownMenuItem className="flex items-center gap-2 cursor-pointer">
-                <Thermometer className="size-4" />
-                <span>Motor temperatures</span>
+              <DropdownMenuItem className={`flex items-center gap-2 cursor-pointer ${
+                temperatureInfo?.hasOverheat 
+                  ? 'bg-red-100 dark:bg-red-900/30 animate-pulse hover:bg-red-200 dark:hover:bg-red-900/50' 
+                  : temperatureInfo?.hasWarning 
+                  ? 'bg-orange-100 dark:bg-orange-900/30 hover:bg-orange-200 dark:hover:bg-orange-900/50' 
+                  : ''
+              }`}>
+                <Thermometer className={`size-4 ${
+                  temperatureInfo?.hasOverheat 
+                    ? 'text-red-500' 
+                    : temperatureInfo?.hasWarning 
+                    ? 'text-orange-500' 
+                    : ''
+                }`} />
+                <span className={`${
+                  temperatureInfo?.hasOverheat 
+                    ? 'text-red-500' 
+                    : temperatureInfo?.hasWarning 
+                    ? 'text-orange-500' 
+                    : ''
+                }`}>Motor temperatures</span>
+                {temperatureInfo?.hasOverheat && (
+                  <AlertTriangle className="size-3 text-red-500 ml-auto" />
+                )}
+                {temperatureInfo?.hasWarning && !temperatureInfo?.hasOverheat && (
+                  <AlertTriangle className="size-3 text-orange-500 ml-auto" />
+                )}
               </DropdownMenuItem>
               <div 
                 className={`overflow-hidden transition-all duration-200 ease-in-out ${
