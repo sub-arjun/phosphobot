@@ -564,13 +564,13 @@ async def read_temperature(
     if not hasattr(robot, "current_temperature"):
         raise HTTPException(
             status_code=400,
-            detail="Robot does not support reading temeperature",
+            detail="Robot does not support reading temprature",
         )
     
-    temeperature = robot.current_temperature()
+    temperature = robot.current_temperature()
 
     return TemperatureReadResponse(
-        current_max_Temperature=temeperature.tolist() if temeperature is not None else None,
+        current_max_Temperature=temperature.tolist() if temperature is not None else None,
     )
 
 @router.post(
