@@ -19,7 +19,13 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { fetcher } from "@/lib/utils";
 import { ServerStatus } from "@/types";
-import { BookText, BrainCircuit, Crown, LogOut, Mail } from "lucide-react";
+import {
+  BookText,
+  BrainCircuit,
+  LogOut,
+  Mail,
+  TestTubeDiagonal,
+} from "lucide-react";
 import useSWR from "swr";
 
 const routeMap = [
@@ -153,7 +159,7 @@ export function AccountTopBar() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <div className="relative cursor-pointer">
+        <div className="relative cursor-pointer pr-1">
           <Avatar className="h-8 w-8">
             <AvatarFallback className="bg-primary text-primary-foreground">
               {getInitial(session.user_email)}
@@ -161,8 +167,10 @@ export function AccountTopBar() {
           </Avatar>
           {/* Badge overlay */}
           <div
-            className={`absolute -bottom-1 -right-2 px-1 py-0.5 text-[8px] font-bold rounded-sm outline-[0.5px] outline-white ${
-              proUser ? "bg-black text-green-500" : "bg-gray-200 text-black"
+            className={`absolute -bottom-2 -right-3 px-1 py-0.5 font-extrabold rounded-sm outline-[0.5px] outline-white font- ${
+              proUser
+                ? "bg-black text-green-500 text-[10px]"
+                : "bg-gray-200 text-black text-[10px]"
             }`}
           >
             {proUser ? "PRO" : "FREE"}
@@ -171,10 +179,10 @@ export function AccountTopBar() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem className="text-sm text-muted-foreground">
-          {session.user_email}
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          {proUser ? "Pro User" : "Free User"}
+          <div className="flex flex-col gap-y-1">
+            <div>{session.user_email}</div>
+            <div>{proUser ? "Pro User" : "Free User"}</div>
+          </div>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {!proUser && (
@@ -184,7 +192,7 @@ export function AccountTopBar() {
               className="flex items-center"
               target="_blank"
             >
-              <Crown className="mr-2 h-4 w-4" />
+              <TestTubeDiagonal className="mr-1 size-4 text-green-500" />
               Upgrade to Pro
             </a>
           </DropdownMenuItem>
@@ -195,13 +203,13 @@ export function AccountTopBar() {
             className="flex items-center"
             target="_blank"
           >
-            <Mail className="mr-2 h-4 w-4" />
+            <Mail className="mr-1 h-4 w-4" />
             Contact Us
           </a>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={logout}>
-          <LogOut className="mr-2 h-4 w-4" />
+          <LogOut className="mr-1 h-4 w-4" />
           Logout
         </DropdownMenuItem>
       </DropdownMenuContent>
