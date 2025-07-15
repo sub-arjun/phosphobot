@@ -346,6 +346,13 @@ def get_tokens() -> Tokens:
     """
     Load the tokens.toml file
     """
+    # Try to load dev tokens first
+    tokens_toml_path = get_base_path() / "tokens.dev.toml"
+    if tokens_toml_path.exists():
+        # Load with toml
+        tokens = toml.load(tokens_toml_path)
+        return Tokens(**tokens)
+    # If not found, try to load prod tokens
     tokens_toml_path = get_resources_path() / "tokens.toml"
     if not tokens_toml_path.exists():
         return Tokens()
