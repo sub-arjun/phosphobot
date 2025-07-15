@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -18,13 +19,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { fetcher } from "@/lib/utils";
 import { ServerStatus } from "@/types";
-import {
-  BookText,
-  BrainCircuit,
-  LogOut,
-  ShieldCheck,
-  ShieldOff,
-} from "lucide-react";
+import { BookText, BrainCircuit, Crown, LogOut, Mail } from "lucide-react";
 import useSWR from "swr";
 
 const routeMap = [
@@ -44,12 +39,8 @@ const routeMap = [
 ];
 
 function ServerIP() {
-  const { data: serverStatus } = useSWR<ServerStatus>(
-    ["/status"],
-    ([url]) => fetcher(url),
-    {
-      refreshInterval: 5000,
-    },
+  const { data: serverStatus } = useSWR<ServerStatus>(["/status"], ([url]) =>
+    fetcher(url),
   );
 
   if (!serverStatus) {
@@ -61,7 +52,7 @@ function ServerIP() {
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="text-xs text-muted-foreground cursor-pointer">
-            {serverStatus.server_ip}
+            {serverStatus.server_ip}:{serverStatus.server_port}
           </span>
         </TooltipTrigger>
         <TooltipContent>
@@ -76,12 +67,8 @@ function RecordingStatus() {
   // Pulsating recording red circle when recording is active
   // Nothing when recording is inactive
   // Tooltip with recording status when hovered
-  const { data: serverStatus } = useSWR<ServerStatus>(
-    ["/status"],
-    ([url]) => fetcher(url),
-    {
-      refreshInterval: 5000,
-    },
+  const { data: serverStatus } = useSWR<ServerStatus>(["/status"], ([url]) =>
+    fetcher(url),
   );
 
   if (!serverStatus) {
@@ -117,12 +104,8 @@ export function AIControlStatus() {
   // AI Control status badge
   // Display a green pulsating BrainCircuit icon when AI is running. When you click on it, it takes you to the /inference page
   // Tooltip with AI status when hovered
-  const { data: serverStatus } = useSWR<ServerStatus>(
-    ["/status"],
-    ([url]) => fetcher(url),
-    {
-      refreshInterval: 5000,
-    },
+  const { data: serverStatus } = useSWR<ServerStatus>(["/status"], ([url]) =>
+    fetcher(url),
   );
 
   if (!serverStatus) {
@@ -155,18 +138,84 @@ export function AIControlStatus() {
   );
 }
 
-export function TopBar() {
-  const currentPath = window.location.pathname;
+export function AccountTopBar() {
   const { session, proUser, logout } = useAuth();
-
-  const matchedRoute = routeMap.find(({ path, isPrefix }) =>
-    isPrefix ? currentPath.startsWith(path) : currentPath === path,
-  );
 
   // Get first letter of email for avatar
   const getInitial = (email: string) => {
     return email ? email.charAt(0).toUpperCase() : "U";
   };
+
+  if (!session) {
+    return null;
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <div className="relative cursor-pointer">
+          <Avatar className="h-8 w-8">
+            <AvatarFallback className="bg-primary text-primary-foreground">
+              {getInitial(session.user_email)}
+            </AvatarFallback>
+          </Avatar>
+          {/* Badge overlay */}
+          <div
+            className={`absolute -bottom-1 -right-2 px-1 py-0.5 text-[8px] font-bold rounded-sm outline-[0.5px] outline-white ${
+              proUser ? "bg-black text-green-500" : "bg-gray-200 text-black"
+            }`}
+          >
+            {proUser ? "PRO" : "FREE"}
+          </div>
+        </div>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem className="text-sm text-muted-foreground">
+          {session.user_email}
+        </DropdownMenuItem>
+        <DropdownMenuItem>
+          {proUser ? "Pro User" : "Free User"}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {!proUser && (
+          <DropdownMenuItem asChild>
+            <a
+              href="https://phospho.ai/pro?utm_source=phosphobot_app"
+              className="flex items-center"
+              target="_blank"
+            >
+              <Crown className="mr-2 h-4 w-4" />
+              Upgrade to Pro
+            </a>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem asChild>
+          <a
+            href="mailto:contact@phospho.ai"
+            className="flex items-center"
+            target="_blank"
+          >
+            <Mail className="mr-2 h-4 w-4" />
+            Contact Us
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={logout}>
+          <LogOut className="mr-2 h-4 w-4" />
+          Logout
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export function TopBar() {
+  const currentPath = window.location.pathname;
+  const { session } = useAuth();
+
+  const matchedRoute = routeMap.find(({ path, isPrefix }) =>
+    isPrefix ? currentPath.startsWith(path) : currentPath === path,
+  );
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50 flex flex-col md:flex-row justify-between items-center gap-4 p-4 bg-background border-b">
@@ -206,32 +255,7 @@ export function TopBar() {
         <ThemeToggle />
         <div className="flex items-center gap-2">
           {session ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Avatar className="h-8 w-8 cursor-pointer">
-                  <AvatarFallback className="bg-primary text-primary-foreground">
-                    {getInitial(session.user_email)}
-                  </AvatarFallback>
-                </Avatar>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem className="text-sm text-muted-foreground">
-                  {session.user_email}
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  {proUser ? (
-                    <ShieldCheck className="mr-2 h-4 w-4 text-green-500" />
-                  ) : (
-                    <ShieldOff className="mr-2 h-4 w-4 text-red-500" />
-                  )}
-                  {proUser ? "Pro User" : "Free User"}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={logout}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <AccountTopBar />
           ) : (
             <div className="flex items-center gap-2">
               <Button

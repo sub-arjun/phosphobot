@@ -37,12 +37,15 @@ class ServerStatus(BaseModel):
         "stopped",
         description="Whether the robot is currently controlled by an AI model.",
     )
-    server_ip: str = Field(
-        ..., description="IP address of the server", examples=["192.168.1.X"]
-    )
     leader_follower_status: bool = Field(
         False,
         description="Whether the leader-follower control is currently active.",
+    )
+    server_ip: str = Field(
+        ..., description="IP address of the phosphobot server", examples=["192.168.1.X"]
+    )
+    server_port: int = Field(
+        ..., description="Port of the phosphobot server", examples=[80, 8020, 8021]
     )
 
 
