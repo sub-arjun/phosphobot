@@ -52,11 +52,23 @@ async def signup(
     """
     Sign up a new user.
     """
+    from phosphobot.app import get_local_ip
+    from phosphobot.configs import config
+
+    delete_session()
     client = await get_client()
 
     try:
+        redirect_url = f"http://{get_local_ip()}:{config.PORT}/"
         response = await client.auth.sign_up(
-            {"email": credentials.email, "password": credentials.password}
+            {
+                "email": credentials.email,
+                "password": credentials.password,
+                "options": {
+                    # Redirect URL: Local IP and port for email confirmation
+                    "email_redirect_to": redirect_url
+                },
+            }
         )
         if response.user is not None:
             if response.session is not None:
@@ -119,7 +131,7 @@ async def signin(
         if response.user is None:
             raise HTTPException(status_code=401, detail="User not found.")
         if response.user.email is None:
-            raise HTTPException(status_code=400, detail="User email not found.")
+            raise HTTPException(status_code=400, detail="User not found.")
         # If signin succeeds, response.session will be present
         session = Session(
             user_id=response.user.id,

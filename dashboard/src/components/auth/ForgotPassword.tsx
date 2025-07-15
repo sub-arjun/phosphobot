@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { fetchWithBaseUrl } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -15,27 +16,16 @@ export function ForgotPassword() {
     e.preventDefault();
     setIsLoading(true);
 
-    try {
-      const response = await fetch("/auth/forgot-password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      });
+    const data = await fetchWithBaseUrl("/auth/forgot-password", "POST", {
+      email,
+    });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to send reset email");
-      }
-
+    if (data) {
       toast.success("Password reset email sent! Please check your inbox.");
       setTimeout(() => navigate("/auth"), 3000);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setIsLoading(false);
     }
+
+    setIsLoading(false);
   };
 
   return (

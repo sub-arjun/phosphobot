@@ -46,6 +46,7 @@ export type ServerStatus = {
   ai_running_status: "stopped" | "running" | "paused" | "waiting";
   leader_follower_status: boolean;
   server_ip: string;
+  server_port: number;
 };
 
 export type AdminTokenSettings = {
