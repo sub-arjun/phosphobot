@@ -1,4 +1,4 @@
-import PhosphoProCallout from "@/components/callout/phospho-pro";
+import { PhosphoProCallout } from "@/components/callout/phospho-pro";
 import { Recorder } from "@/components/common/recorder";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
