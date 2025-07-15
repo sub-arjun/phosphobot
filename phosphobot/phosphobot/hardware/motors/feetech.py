@@ -22,6 +22,7 @@ from copy import deepcopy
 import threading
 import queue
 import time
+import asyncio
 from uuid import uuid4
 
 import numpy as np
@@ -326,8 +327,6 @@ class FeetechMotorsBus:
         # Adding for port already in use error
 
         self.task_queue = queue.Queue()
-        self.results = {}  
-        self.results_lock = threading.Lock() 
         self.worker_thread = None
         self._stop_event = threading.Event()
 
@@ -342,8 +341,7 @@ class FeetechMotorsBus:
 
         while not self._stop_event.is_set():
             try:
-                # Block until a task is available
-                task_id, action, args, kwargs = self.task_queue.get(timeout=0.001)
+                task_id, action, args, kwargs, result_queue = self.task_queue.get(timeout=0.001)
 
                 result = None
                 error = None
@@ -368,12 +366,9 @@ class FeetechMotorsBus:
                 except Exception as e:
                     error = e
 
-                # Store the result for the waiting thread
-                with self.results_lock:
-                    self.results[task_id] = (result, error)
+                result_queue.put((result, error))
 
             except queue.Empty:
-
                 continue
 
     def _submit_task_and_wait(self, action, args=(), kwargs={}):
@@ -382,18 +377,15 @@ class FeetechMotorsBus:
              raise ConnectionError("Worker thread is not running.")
 
         task_id = uuid4()
-        task = (task_id, action, args, kwargs)
+        result_queue = queue.Queue(maxsize=1)  # Per-task result channel
+        task = (task_id, action, args, kwargs, result_queue)
         self.task_queue.put(task)
 
         # Block and wait for the result
-        while True:
-            with self.results_lock:
-                if task_id in self.results:
-                    result, error = self.results.pop(task_id)
-                    if error:
-                        raise error # Re-raise the exception from the worker thread
-                    return result
-            time.sleep(0.001) # Prevent busy-waiting
+        result, error = result_queue.get()
+        if error:
+            raise error
+        return result
 
     # --- Public-Facing API ---
     # These methods just submit tasks to the queue.
