@@ -21,6 +21,7 @@ class RobotConfigStatus(BaseModel):
     name: str
     robot_type: Literal["manipulator", "mobile", "other"] = "manipulator"
     device_name: str | None
+    temperature_current_max_list : List[List[float | None]] | None = None
 
 
 class BaseRobot(ABC):

@@ -2,8 +2,8 @@ export type RobotConfigStatus = {
   name: string;
   device_name?: string;
   robot_type: "manipulator" | "mobile" | "other";
+  temperature_current_max_list?: [number | null, number | null][];
 };
-
 export type SingleCameraStatus = {
   camera_id: number;
   is_active: boolean;

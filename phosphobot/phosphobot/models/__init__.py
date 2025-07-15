@@ -357,9 +357,9 @@ class TemperatureReadResponse(BaseModel):
     Response to read the Temperature of the robot.
     """
 
-    current_max_Temperature: List[tuple[float | None,float | None]] | None = Field(
+    current_max_Temperature: List[List[float | None]] | None = Field(
         ...,
-        description="A list of length 6 with tuple of 2 for each, with the current Temperature and maximum Temperature of each joint. If the robot is not connected, this will be None.",
+        description="A list of length 6 with List of 2 for each, with the current Temperature and maximum Temperature of each joint. If the robot is not connected, this will be None.",
     )
 
 class InfoResponse(BaseModel):

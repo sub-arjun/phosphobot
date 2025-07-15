@@ -25,6 +25,8 @@ import {
   Moon,
   PlusCircle,
   X,
+  Thermometer, 
+  AlertTriangle
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -40,6 +42,8 @@ function RobotStatusMenuItem({
   robotUsbPort: string;
   robot: RobotConfigStatus;
 }) {
+  const [isTemperatureExpanded, setIsTemperatureExpanded] = useState(false);
+  
   const { data: robotTorqueStatus, mutate: mutateTorque } =
     useSWR<TorqueStatus>([`/torque/read?robot_id=${robotId}`], ([url]) =>
       fetcher(url, "POST"),
@@ -62,6 +66,25 @@ function RobotStatusMenuItem({
     | number[]
     | undefined;
   const isTorqueEnabled = torqueStatus?.some((status) => status === 1);
+
+  // Calculate temperature info
+  const getTemperatureInfo = () => {
+    if (!robot.temperature_current_max_list) return null;
+    
+    const validTemps = robot.temperature_current_max_list
+      .filter(([current]) => current !== null)
+      .map(([current, max]) => ({ current: current!, max }));
+    
+    if (validTemps.length === 0) return null;
+    
+    const maxTemp = Math.max(...validTemps.map(t => t.current));
+    const hasOverheat = validTemps.some(t => t.max !== null && t.current >= t.max - 5);
+    const hasWarning = validTemps.some(t => t.max !== null && t.current >= t.max - 15 && t.current <= t.max - 5);
+    
+    return { maxTemp, hasOverheat, hasWarning };
+  };
+
+  const temperatureInfo = getTemperatureInfo();
 
   // Sends a shutdown command to a specific robot and then refreshes its status.
   const moveToSleep = async () => {
@@ -111,7 +134,13 @@ function RobotStatusMenuItem({
       <DropdownMenuSubTrigger>
         <div className="p-2 text-sm flex justify-between items-center gap-x-2">
           <div className="relative">
-            <Bot className="size-5" />
+            <Bot className={`size-5 ${
+              temperatureInfo?.hasOverheat 
+                ? 'text-red-500' 
+                : temperatureInfo?.hasWarning 
+                ? 'text-orange-500' 
+                : ''
+            }`} />
             {leaderArmSerialIds.includes(robotUsbPort) && (
               <Crown className="absolute -top-2 -right-2 size-3 text-green-500" />
             )}
@@ -123,6 +152,23 @@ function RobotStatusMenuItem({
             {robot.device_name && (
               <div className="text-xs text-muted-foreground">
                 {robot.device_name}
+              </div>
+            )}
+            {temperatureInfo && (
+              <div className={`text-xs flex items-center gap-1 ${
+                temperatureInfo.hasOverheat 
+                  ? 'text-red-500 animate-pulse' 
+                  : temperatureInfo.hasWarning 
+                  ? 'text-orange-500' 
+                  : 'text-muted-foreground'
+              }`}>
+                <span>Motor temperature: {temperatureInfo.maxTemp.toFixed(1)}°C</span>
+                {temperatureInfo.hasOverheat && (
+                  <AlertTriangle className="size-3 text-red-500" />
+                )}
+                {temperatureInfo.hasWarning && !temperatureInfo.hasOverheat && (
+                  <AlertTriangle className="size-3 text-orange-500" />
+                )}
               </div>
             )}
           </div>
@@ -181,6 +227,54 @@ function RobotStatusMenuItem({
           <Moon className="size-4" />
           <span>Move to sleep</span>
         </DropdownMenuItem>
+        {robot.temperature_current_max_list && (
+          <>
+            <DropdownMenuSeparator />
+            <div
+              onMouseEnter={() => setIsTemperatureExpanded(true)}
+              onMouseLeave={() => setIsTemperatureExpanded(false)}
+            >
+              <DropdownMenuItem className="flex items-center gap-2 cursor-pointer">
+                <Thermometer className="size-4" />
+                <span>Motor temperatures</span>
+              </DropdownMenuItem>
+              <div 
+                className={`overflow-hidden transition-all duration-200 ease-in-out ${
+                  isTemperatureExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                }`}
+              >
+                {robot.temperature_current_max_list.map(([current, max], index) => {
+                  const isOverheating = current !== null && max !== null && current >= max - 5;
+                  const isWarning = current !== null && max !== null && current >= max - 15 && current <= max -5;
+                  return (
+                    <DropdownMenuItem 
+                      key={index} 
+                      className={`cursor-default hover:bg-transparent focus:bg-transparent pl-2 ${
+                        isOverheating 
+                          ? 'bg-red-100 dark:bg-red-900/30' 
+                          : isWarning 
+                          ? 'bg-orange-100 dark:bg-orange-900/30' 
+                          : ''
+                      }`}
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      <span className="text-sm">
+                        Motor {index + 1}: {current !== null ? `${current.toFixed(1)}°C` : 'N/A'}
+                        {max !== null && ` / ${max.toFixed(1)}°C`}
+                        {isOverheating && (
+                          <AlertTriangle className="inline size-3 ml-1 text-red-500" />
+                        )}
+                        {isWarning && !isOverheating && (
+                          <AlertTriangle className="inline size-3 ml-1 text-orange-500" />
+                        )}
+                      </span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   );
@@ -247,11 +341,14 @@ export function RobotStatusDropdown() {
     fetcher(url),
   );
   const prevRef = useRef<RobotConfigStatus[]>([]);
+  const prevTemperatureStatusRef = useRef<{[key: string]: {hasOverheating: boolean, hasWarning: boolean}}>({});
 
   useEffect(() => {
     if (!serverStatus) return;
     const prev = prevRef.current;
     const current = serverStatus.robot_status ?? [];
+    
+    // Check for disconnected robots
     const disconnected = prev.filter(
       (r) => !current.some((c) => c.device_name === r.device_name),
     );
@@ -259,12 +356,87 @@ export function RobotStatusDropdown() {
       const ids = disconnected.map((r) => r.device_name ?? "").join(", ");
       toast(`Robot${disconnected.length > 1 ? "s" : ""} ${ids} disconnected`);
     }
+
+    // Check for temperature warnings and overheating
+    const currentTemperatureStatus: {[key: string]: {hasOverheating: boolean, hasWarning: boolean}} = {};
+    
+    current.forEach((robot, index) => {
+      const robotKey = robot.device_name ?? `robot_${index}`;
+      let hasOverheating = false;
+      let hasWarning = false;
+      
+      if (robot.temperature_current_max_list) {
+        robot.temperature_current_max_list.forEach(([current, max]) => {
+          if (current === null || max === null) return;
+          
+          if (current >= max - 5) {
+            hasOverheating = true;
+          } else if (current >= max - 15) {
+            hasWarning = true;
+          }
+        });
+      }
+      
+      currentTemperatureStatus[robotKey] = { hasOverheating, hasWarning };
+      
+      // Check if temperature status changed
+      const prevStatus = prevTemperatureStatusRef.current[robotKey] || { hasOverheating: false, hasWarning: false };
+      
+      // Toast for new overheating condition
+      if (hasOverheating && !prevStatus.hasOverheating) {
+        toast.error(`Critical Temperature Alert: Robot ${robot.name || `#${index}`} motors have exceeded safe operating temperature. Please move robot to sleep position and disconnect power immediately to prevent hardware damage.`, {
+          duration: 10000, // Show for 10 seconds
+        });
+      }
+      
+      // Toast for new warning condition (only if not overheating)
+      if (hasWarning && !hasOverheating && !prevStatus.hasWarning && !prevStatus.hasOverheating) {
+        toast.warning(`Temperature Warning: Robot ${robot.name || `#${index}`} motor temperature is approaching thermal limits. Consider moving robot to sleep position to allow cooling.`, {
+          duration: 5000,
+        });
+      }
+      
+      // Toast for temperature returning to normal
+      if (!hasOverheating && !hasWarning && (prevStatus.hasOverheating || prevStatus.hasWarning)) {
+        toast.success(`✅ Robot ${robot.name || `#${index}`} temperature normalized.`, {
+          duration: 3000,
+        });
+      }
+    });
+    
     prevRef.current = current;
+    prevTemperatureStatusRef.current = currentTemperatureStatus;
   }, [serverStatus]);
 
   const leaderArmSerialIds = useGlobalStore(
     (state) => state.leaderArmSerialIds,
   );
+
+  // Check temperature status for all robots
+  const checkTemperatureStatus = () => {
+    if (!serverStatus?.robot_status) return { hasOverheating: false, hasWarning: false };
+    
+    let hasOverheating = false;
+    let hasWarning = false;
+    
+    serverStatus.robot_status.forEach(robot => {
+      if (!robot.temperature_current_max_list) return;
+      
+      robot.temperature_current_max_list.forEach(([current, max]) => {
+        if (current === null || max === null) return;
+        
+        if (current >= max - 5) {
+          hasOverheating = true;
+        } else if (current >= max - 15) {
+          hasWarning = true;
+        }
+      });
+    });
+    
+    return { hasOverheating, hasWarning };
+  };
+
+  const { hasOverheating, hasWarning } = checkTemperatureStatus();
 
   if (!serverStatus) {
     return (
@@ -286,24 +458,66 @@ export function RobotStatusDropdown() {
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            className="flex items-center gap-2 relative cursor-pointer"
+            className={`flex items-center gap-2 relative cursor-pointer ${
+              hasOverheating 
+                ? 'border-red-500 bg-red-50 dark:bg-red-900/20 animate-pulse' 
+                : hasWarning 
+                ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20' 
+                : ''
+            }`}
           >
             {robotConnected ? (
-              <span className="size-2 rounded-full bg-green-500" />
+              <span className={`size-2 rounded-full ${
+                hasOverheating 
+                  ? 'bg-red-500 animate-pulse' 
+                  : hasWarning 
+                  ? 'bg-orange-500' 
+                  : 'bg-green-500'
+              }`} />
             ) : (
               <span className="size-2 rounded-full bg-destructive" />
             )}
             {robotConnected && (
               <>
-                {serverStatus.robot_status.map((robot, index) => (
-                  <div key={index} className="relative">
-                    <Bot className="size-5" />
-                    {robot.device_name &&
-                      leaderArmSerialIds.includes(robot.device_name) && (
-                        <Crown className="absolute -top-2 -right-2 size-3 text-green-500" />
-                      )}
-                  </div>
-                ))}
+                {serverStatus.robot_status.map((robot, index) => {
+                  // Calculate temperature status for this specific robot
+                  const robotTemperatureInfo = (() => {
+                    if (!robot.temperature_current_max_list) return null;
+                    
+                    const validTemps = robot.temperature_current_max_list
+                      .filter(([current]) => current !== null)
+                      .map(([current, max]) => ({ current: current!, max }));
+                    
+                    if (validTemps.length === 0) return null;
+                    
+                    const hasOverheat = validTemps.some(t => t.max !== null && t.current >= t.max - 5);
+                    const hasWarning = validTemps.some(t => t.max !== null && t.current >= t.max - 15 && t.current <= t.max - 5);
+                    
+                    return { hasOverheat, hasWarning };
+                  })();
+
+                  return (
+                    <div key={index} className="relative">
+                      <Bot className={`size-5 ${
+                        robotTemperatureInfo?.hasOverheat 
+                          ? 'text-red-500' 
+                          : robotTemperatureInfo?.hasWarning 
+                          ? 'text-orange-500' 
+                          : ''
+                      }`} />
+                      {robot.device_name &&
+                        leaderArmSerialIds.includes(robot.device_name) && (
+                          <Crown className="absolute -top-2 -right-2 size-3 text-green-500" />
+                        )}
+                    </div>
+                  );
+                })}
+                {hasOverheating && (
+                  <AlertTriangle className="size-4 text-red-500 animate-pulse" />
+                )}
+                {hasWarning && !hasOverheating && (
+                  <AlertTriangle className="size-4 text-orange-500" />
+                )}
               </>
             )}
             {!robotConnected && (

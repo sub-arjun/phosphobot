@@ -11,6 +11,7 @@ from phosphobot.control_signal import ControlSignal
 from phosphobot.hardware.base import BaseManipulator
 from phosphobot.hardware.motors.feetech import FeetechMotorsBus  # type: ignore
 from phosphobot.utils import get_resources_path
+from phosphobot.models import RobotConfigStatus
 
 
 class SO100Hardware(BaseManipulator):
@@ -71,6 +72,8 @@ class SO100Hardware(BaseManipulator):
     motor_communication_errors: int = 0
 
     _gravity_task: Optional[asyncio.Task] = None
+
+    _max_temperature_cache : dict  = {}
 
     @property
     def servo_id_to_motor_name(self):
@@ -310,6 +313,14 @@ class SO100Hardware(BaseManipulator):
             logger.warning(f"Error reading motor voltage for servo {servo_id}: {e}")
             self.update_motor_errors()
             return None
+        
+    def status(self) -> RobotConfigStatus:
+        temeperature = self.current_temperature()
+        return RobotConfigStatus(
+            name=self.name,
+            device_name=getattr(self, "SERIAL_ID", None),
+            temperature_current_max_list=temeperature.tolist() if temeperature is not None else None
+        )
     
     def read_motor_temperature(self, servo_id: int, **kwargs) -> tuple[float,float] | None:
         """
@@ -322,13 +333,15 @@ class SO100Hardware(BaseManipulator):
                 "Present_Temperature",
                 motor_names=self.servo_id_to_motor_name[servo_id],
             )
-            maximum_temperature = self.motors_bus.read(
-                "Max_Temperature_Limit",
-                motor_names=self.servo_id_to_motor_name[servo_id],
-            )
+            if servo_id not in self._max_temperature_cache:
+                max_temp = self.motors_bus.read(
+                    "Max_Temperature_Limit",
+                    motor_names=self.servo_id_to_motor_name[servo_id],
+                )
+                self._max_temperature_cache[servo_id] = float(max_temp.item())
             self.motor_communication_errors = 0
             # Extract scalar values from NumPy arrays
-            return (float(present_temperature.item()), float(maximum_temperature.item()))  # unit is Celsius
+            return (float(present_temperature.item()), self._max_temperature_cache[servo_id])  # unit is Celsius
         except Exception as e:
             logger.warning(f"Error reading motor temperature for servo {servo_id}: {e}")
             self.update_motor_errors()
