@@ -134,7 +134,7 @@ class BaseManipulator(BaseRobot):
 
         raise: Exception if the routine has not been implemented
         """
-        raise NotImplementedError("The robot read motor temprature must be implemented.")
+        raise NotImplementedError("The robot read motor temperature must be implemented.")
 
     @abstractmethod
     def write_motor_position(self, servo_id: int, units: int, **kwargs) -> None:
