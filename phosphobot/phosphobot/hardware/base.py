@@ -1166,8 +1166,7 @@ class BaseManipulator(BaseRobot):
             for i, servo_id in enumerate(self.SERVO_IDS):
                 temps = self.read_motor_temperature(servo_id)
                 if temps is not None:
-                    # print("="*50,temps)
-                    # print("="*50)
+                    
                     current_temperatures[i] = temps  # temps is a tuple: (current, max)
 
             return current_temperatures

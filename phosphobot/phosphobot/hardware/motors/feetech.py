@@ -415,7 +415,6 @@ class FeetechMotorsBus:
         return self._submit_task_and_wait('read', args=(data_name, motor_names))
 
     def write(self, data_name, values, motor_names=None):
-        # Write can be "fire and forget" or wait for completion. Waiting is safer.
         return self._submit_task_and_wait('write', args=(data_name, values, motor_names))
 
     def read_with_motor_ids(self, motor_models, motor_ids, data_name, **kwargs):

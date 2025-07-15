@@ -545,7 +545,6 @@ async def read_voltage(
     return VoltageReadResponse(
         current_voltage=voltage.tolist() if voltage is not None else None,
     )
-import time
 
 @router.post(
     "/temperature/read",
@@ -567,13 +566,9 @@ async def read_temperature(
             status_code=400,
             detail="Robot does not support reading temeperature",
         )
-    # intTime = time.time()
-    # for i in range(50):
+    
     temeperature = robot.current_temperature()
 
-    # print("="*50)
-    # print(f"time is {time.time()-intTime}")
-    # print("="*50)
     return TemperatureReadResponse(
         current_max_Temperature=temeperature.tolist() if temeperature is not None else None,
     )

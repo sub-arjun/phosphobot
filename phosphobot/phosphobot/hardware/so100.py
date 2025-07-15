@@ -340,7 +340,7 @@ class SO100Hardware(BaseManipulator):
                 )
                 self._max_temperature_cache[servo_id] = float(max_temp.item())
             self.motor_communication_errors = 0
-            # Extract scalar values from NumPy arrays
+           
             return (float(present_temperature.item()), self._max_temperature_cache[servo_id])  # unit is Celsius
         except Exception as e:
             logger.warning(f"Error reading motor temperature for servo {servo_id}: {e}")
