@@ -59,13 +59,14 @@ async def signup(
     client = await get_client()
 
     try:
+        redirect_url = f"http://{get_local_ip()}:{config.PORT}/"
         response = await client.auth.sign_up(
             {
                 "email": credentials.email,
                 "password": credentials.password,
                 "options": {
                     # Redirect URL: Local IP and port for email confirmation
-                    "email_redirect_to": f"http://{get_local_ip()}:{config.PORT}",
+                    "email_redirect_to": redirect_url
                 },
             }
         )
