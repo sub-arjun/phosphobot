@@ -564,7 +564,7 @@ async def read_temperature(
     if not hasattr(robot, "current_temperature"):
         raise HTTPException(
             status_code=400,
-            detail="Robot does not support reading temprature",
+            detail="Robot does not support reading temperature",
         )
     
     temperature = robot.current_temperature()
