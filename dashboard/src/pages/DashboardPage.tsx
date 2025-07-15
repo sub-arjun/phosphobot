@@ -231,7 +231,7 @@ function AIModelsCard() {
   );
 }
 
-export default function DashboardPage() {
+export function DashboardPage() {
   const navigate = useNavigate();
   const { proUser } = useAuth();
   const { data: serverStatus, isLoading } = useSWR<ServerStatus>(
