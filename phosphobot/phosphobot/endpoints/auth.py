@@ -63,8 +63,10 @@ async def signup(
             {
                 "email": credentials.email,
                 "password": credentials.password,
-                # Redirect URL: Local IP and port for email confirmation
-                "email_redirect_to": f"http://{get_local_ip()}:{config.PORT}",
+                "options": {
+                    # Redirect URL: Local IP and port for email confirmation
+                    "email_redirect_to": f"http://{get_local_ip()}:{config.PORT}",
+                },
             }
         )
         if response.user is not None:
