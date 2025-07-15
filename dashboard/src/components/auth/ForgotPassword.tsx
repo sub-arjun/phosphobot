@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { fetchWithBaseUrl } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -16,12 +17,8 @@ export function ForgotPassword() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/auth/forgot-password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
+      const response = await fetchWithBaseUrl("/auth/forgot-password", "POST", {
+        email,
       });
 
       if (!response.ok) {

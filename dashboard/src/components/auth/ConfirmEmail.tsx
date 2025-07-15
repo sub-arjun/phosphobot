@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/context/AuthContext";
+import { fetchWithBaseUrl } from "@/lib/utils";
 import { Session } from "@/types";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -22,33 +23,17 @@ export function ConfirmEmail() {
         return;
       }
 
-      try {
-        const response = await fetch("/auth/confirm", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          }),
+      const data: { message: string; session: Session } =
+        await fetchWithBaseUrl("/auth/confirm", "POST", {
+          access_token: accessToken,
+          refresh_token: refreshToken,
         });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || "Email confirmation failed");
-        }
-
-        const data: { message: string; session: Session } =
-          await response.json();
-        console.log("Confirmation data:", data);
-
+      if (data) {
         localStorage.setItem("session", JSON.stringify(data.session));
         login(data.session.user_email, "", data.session);
         toast.success("Email confirmed successfully!");
         navigate("/");
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "An error occurred");
       }
     };
 

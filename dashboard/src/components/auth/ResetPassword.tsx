@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { fetchWithBaseUrl } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -49,31 +50,18 @@ export function ResetPassword() {
 
     setIsLoading(true);
 
-    try {
-      const response = await fetch("/auth/reset-password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          access_token: tokens.accessToken,
-          refresh_token: tokens.refreshToken,
-          new_password: newPassword,
-        }),
-      });
+    const response = await fetchWithBaseUrl("/auth/reset-password", "POST", {
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+      new_password: newPassword,
+    });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to reset password");
-      }
-
+    if (response) {
       toast.success("Password reset successfully! Redirecting to login...");
       setTimeout(() => navigate("/auth"), 2000);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setIsLoading(false);
     }
+
+    setIsLoading(false);
   };
 
   return (
