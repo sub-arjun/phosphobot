@@ -127,6 +127,13 @@ class BaseManipulator(BaseRobot):
         """
         raise NotImplementedError("The robot enable torque must be implemented.")
 
+    def read_motor_temperature(self, servo_id: int) -> tuple[float,float] | None:
+        """
+        Read the temperature of a motor
+        raise: Exception if the routine has not been implemented
+        """
+        raise NotImplementedError("The robot read motor temeprature must be implemented.")
+
     @abstractmethod
     def write_motor_position(self, servo_id: int, units: int, **kwargs) -> None:
         """
