@@ -16,23 +16,16 @@ export function ForgotPassword() {
     e.preventDefault();
     setIsLoading(true);
 
-    try {
-      const response = await fetchWithBaseUrl("/auth/forgot-password", "POST", {
-        email,
-      });
+    const data = await fetchWithBaseUrl("/auth/forgot-password", "POST", {
+      email,
+    });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to send reset email");
-      }
-
+    if (data) {
       toast.success("Password reset email sent! Please check your inbox.");
       setTimeout(() => navigate("/auth"), 3000);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setIsLoading(false);
     }
+
+    setIsLoading(false);
   };
 
   return (
