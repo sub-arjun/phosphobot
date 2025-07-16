@@ -133,11 +133,7 @@ cd ./dashboard && (npm i && npm run build && mkdir -p ../phosphobot/resources/di
 cd phosphobot && uv run --python 3.10 phosphobot run --simulation=headless
 ```
 
-4. Go to `localhost:80` in your browser to see the dashboard or get the server infos with:
-
-```bash
-curl -X 'GET' 'http://localhost/status' -H 'accept: application/json'
-```
+4. Go to `localhost:80` or `localhost:8020` in your browser to see the dashboard. Go to `localhost:80/docs` to see API docs.
 
 ## Contributing
 
