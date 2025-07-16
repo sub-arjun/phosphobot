@@ -44,12 +44,10 @@ pip install phosphobot
 
 For development or if you face issues with some submodule or version, you can install phosphobot from source.
 
-1. **Clone the phosphobot repo and fetch submodules.** Make sure you have [git lfs](https://git-lfs.com) installed beforehand
+1. **Clone the phosphobot repo.** Make sure you have [git lfs](https://git-lfs.com) installed beforehand.
 
    ```bash
-   git clone https://github.com/phospho-app/phosphobot.git
-   cd phosphobot
-   git submodule update --init --recursive
+   git clone https://github.com/phospho-app/phosphobot.git --depth 1
    ```
 
 2. **Install [uv](https://astral.sh/uv/)** to manage python dependencies. The recommended python version for dev is `3.10`
