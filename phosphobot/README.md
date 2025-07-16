@@ -142,7 +142,7 @@ You can extend **phosphobot** by plugging in support for any custom robot. Just 
 
 4. **Try in simulation first**
 
-   1. When running phosphobot, use the `--only-simulation` flag and `config.ONLY_SIMULATION` to force the `RobotConnectionManager` to detect your robot, even if it's not connected to hardware.
+   1. When running phosphobot, use the `--only-simulation` flag and `config.ONLY_SIMULATION` to force the `RobotConnectionManager` to detect your robot, even if it's not connected to hardware. You'll need to change the `RobotConnectionManager` so that it's actually your robot that gets loaded.
 
    2. When running phosphobot, use the `--simulation=gui` flag to display the pybullet GUI. This way, you can check if keyboard control and VR control actually work in simulation before trying it on hardware. Pay attention to the ways the joints bends and the limits set in the urdf.
 
