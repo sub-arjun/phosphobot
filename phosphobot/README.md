@@ -1,3 +1,5 @@
+# phosphobot
+
 **phosphobot** – CLI Toolkit for Robot Teleoperation and Action Models
 [![PyPI version](https://img.shields.io/pypi/v/phosphobot?style=flat-square)](https://pypi.org/project/phosphobot/)
 [![GitHub](https://img.shields.io/badge/GitHub-Repo-blue?style=flat-square)](https://github.com/phospho-app/phosphobot)
@@ -7,16 +9,12 @@ A simple, community-driven middleware for controlling robots, recording datasets
 
 All from your terminal or browser dashboard.
 
----
-
 ## Features
 
 - **Easy Installation**: python module
 - **Web Dashboard**: Instant access to an interactive control panel for teleoperation
 - **Dataset Recording**: Record expert demonstrations with a keyboard, in VR, or with a leader arm
 - **Model Training & Inference**: Kick off training jobs or serve models through HTTP/WebSocket APIs
-
----
 
 ## phosphobot installation
 
@@ -42,7 +40,7 @@ You can also use pip.
 pip install phosphobot
 ```
 
-## From Source
+## Install from source
 
 For development or if you face issues with some submodule or version, you can install phosphobot from source.
 
@@ -100,8 +98,6 @@ For development or if you face issues with some submodule or version, you can in
 
    On Windows, run the full command to build the app.
 
----
-
 ## Dashboard & Control
 
 After launching the server, open your browser and navigate to:
@@ -117,18 +113,6 @@ Here you can:
 - **Teleoperate** your robot via keyboard, leader arm, or Meta Quest
 - **Record** demonstration datasets (40 episodes recommended)
 - **Train** and **deploy** action models directly from the UI
-
----
-
-## Start building
-
-- **Docs**: Full user guide at [https://docs.phospho.ai](https://docs.phospho.ai)
-- **Discord**: Join us on Discord for support and community chat: [https://discord.gg/cbkggY6NSK](https://discord.gg/cbkggY6NSK)
-- **GitHub Repo**: [https://github.com/phospho-app/phosphobot](https://github.com/phospho-app/phosphobot)
-- **Examples**: Browse [the examples](https://github.com/phospho-app/phosphobot/tree/main/examples)
-- **Contribute**: Open a PR to expand the examples, support more robots, improve the tool
-
----
 
 ## Adding a New Robot
 
@@ -166,7 +150,13 @@ You can extend **phosphobot** by plugging in support for any custom robot. Just 
 
 Build and run the app again and ensure your robot gets detected and can be moved. Happy with your changes? Open a pull request! We also recommend you look for testers on [our Discord](https://discord.gg/cbkggY6NSK).
 
----
+## Start building
+
+- **Docs**: Full user guide at [https://docs.phospho.ai](https://docs.phospho.ai)
+- **Discord**: Join us on Discord for support and community chat: [https://discord.gg/cbkggY6NSK](https://discord.gg/cbkggY6NSK)
+- **GitHub Repo**: [https://github.com/phospho-app/phosphobot](https://github.com/phospho-app/phosphobot)
+- **Examples**: Browse [the examples](https://github.com/phospho-app/phosphobot/tree/main/examples)
+- **Contribute**: Open a PR to expand the examples, support more robots, improve the tool
 
 ## License
 
