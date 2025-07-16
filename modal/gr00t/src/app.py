@@ -53,16 +53,6 @@ gr00t_image = (
     .pip_install_from_pyproject(
         pyproject_toml=str(phosphobot_dir / "pyproject.toml"),
     )
-    # .add_local_dir(
-    #     local_path=phosphobot_dir,
-    #     remote_path="/root/src/phosphobot",
-    #     ignore=lambda p: ".venv" in str(p),
-    # )
-    # .add_local_dir(
-    #     local_path=phosphobot_dir / "phosphobot",
-    #     remote_path="/root/src/phosphobot",
-    #     ignore=lambda p: ".venv" in str(p),
-    # )
     .add_local_python_source("phosphobot")
 )
 
