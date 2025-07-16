@@ -73,7 +73,7 @@ class SO100Hardware(BaseManipulator):
 
     _gravity_task: Optional[asyncio.Task] = None
 
-    _max_temperature_cache : dict  = {}
+    _max_temperature_cache: dict = {}
 
     @property
     def servo_id_to_motor_name(self):
@@ -313,16 +313,18 @@ class SO100Hardware(BaseManipulator):
             logger.warning(f"Error reading motor voltage for servo {servo_id}: {e}")
             self.update_motor_errors()
             return None
-        
+
     def status(self) -> RobotConfigStatus:
         temperature = self.current_temperature()
         return RobotConfigStatus(
             name=self.name,
             device_name=getattr(self, "SERIAL_ID", None),
-            temperature_current_max_list=temperature
+            temperature=temperature,
         )
-    
-    def read_motor_temperature(self, servo_id: int, **kwargs) -> tuple[float,float] | None:
+
+    def read_motor_temperature(
+        self, servo_id: int, **kwargs
+    ) -> tuple[float, float] | None:
         """
         Read the temperature of a Feetech servo.
         """
@@ -340,8 +342,11 @@ class SO100Hardware(BaseManipulator):
                 )
                 self._max_temperature_cache[servo_id] = float(max_temp.item())
             self.motor_communication_errors = 0
-           
-            return (float(present_temperature.item()), self._max_temperature_cache[servo_id])  # unit is Celsius
+
+            return (
+                float(present_temperature.item()),
+                self._max_temperature_cache[servo_id],
+            )  # unit is Celsius
         except Exception as e:
             logger.warning(f"Error reading motor temperature for servo {servo_id}: {e}")
             self.update_motor_errors()
