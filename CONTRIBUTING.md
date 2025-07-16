@@ -16,20 +16,10 @@ Please ensure your code is well-documented and includes:
 - Basic usage examples
 - Any special requirements
 
-## Setup
+## Bounty program
 
-This module use [uv](https://github.com/astral-sh/uv) for packaging.
+Checkout our [bounty program](https://docs.google.com/spreadsheets/d/1NKyKoYbNcCMQpTzxbNJeoKWucPzJ5ULJkuiop4Av8ZQ/edit?gid=0#gid=0).
 
-```bash
-# On macOS and Linux.
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+## How to setup the phosphobot project?
 
-```bash
-# On Windows.
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-## Building from source
-
-Look at the main README.md
+Read how to install phosphobot from source [in this guide.](./phosphobot/README.md)
