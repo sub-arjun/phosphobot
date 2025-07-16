@@ -1,9 +1,15 @@
+
+export type Temperature = {
+  current: number | null;
+  max: number | null;
+};
+
 export type RobotConfigStatus = {
   name: string;
   device_name?: string;
   robot_type: "manipulator" | "mobile" | "other";
+  temperature_current_max_list?: Temperature[];
 };
-
 export type SingleCameraStatus = {
   camera_id: number;
   is_active: boolean;
