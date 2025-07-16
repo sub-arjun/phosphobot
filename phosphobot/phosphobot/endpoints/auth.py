@@ -239,10 +239,14 @@ async def verify_email_token(
                 "type": "email",
             }
         )
-        if response.user is None:
-            raise HTTPException(status_code=400, detail="User not found")
-        if response.session is None:
-            raise HTTPException(status_code=400, detail="Session not found")
+        if (
+            response.user is None
+            or response.session is None
+            or response.user.email is None
+        ):
+            raise HTTPException(
+                status_code=400, detail="Invalid or expired email verification token."
+            )
 
         session = Session(
             user_id=response.user.id,
