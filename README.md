@@ -38,22 +38,7 @@ See this [README](phosphobot/README.md) for more details on how to add support f
 
 ### 2. Install the phosphobot server
 
-```bash
-# Install it this way
-curl -fsSL https://raw.githubusercontent.com/phospho-app/phosphobot/main/install.sh | bash
-# Start it this way
-phosphobot run
-# Upgrade it with brew or with apt
-# sudo apt update && sudo apt install phosphobot
-# brew update && brew upgrade phosphobot
-# powershell -ExecutionPolicy ByPass -Command "irm https://raw.githubusercontent.com/phospho-app/phosphobot/main/install.ps1 | iex"
-```
-
-This will:
-
-- on Mac: use brew to install phosphobot
-- on Linux: use apt to install phosphobot
-- on Windows: install a .exe
+Install phosphobot for your OS [using the one liners available here](https://docs.phospho.ai/installation).
 
 ### 3. Make your robot move for the first time!
 
