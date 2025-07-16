@@ -404,7 +404,7 @@ export default function AIControlPage() {
                     onValueChange={(option: Option) => {
                       setModelId(option.value);
                     }}
-                    placeholder="nvidia/GR00T-N1-2B"
+                    placeholder="nvidia/GR00T-N1.5-3B"
                     className="w-full"
                     disabled={aiStatus?.status !== "stopped"}
                     emptyMessage="Make sure this is a public model available on Hugging Face."

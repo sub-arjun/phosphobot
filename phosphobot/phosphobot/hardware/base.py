@@ -361,14 +361,16 @@ class BaseManipulator(BaseRobot):
 
         return current_gripper_torque
 
-    async def move_to_initial_position(self):
+    async def move_to_initial_position(self, open_gripper: bool = False):
         """
         Move the robot to its initial position.
         """
         self.init_config()
         self.enable_torque()
         zero_position = np.zeros(len(self.actuated_joints))
-        self.set_motors_positions(zero_position, enable_gripper=True)
+        self.set_motors_positions(zero_position, enable_gripper=not open_gripper)
+        if open_gripper:
+            self.write_gripper_command(1.0)
         # Wait for the robot to move to the initial position
         await asyncio.sleep(0.5)
         (
