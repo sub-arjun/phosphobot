@@ -45,6 +45,7 @@ admin_image = (
         "zmq>=0.0.0",
         "av>=14.2.1",
         "sentry-sdk",
+        "stripe",
     )
     .pip_install_from_pyproject(
         pyproject_toml=str(phosphobot_dir / "pyproject.toml"),
@@ -340,7 +341,11 @@ class PublicUser(BaseModel):
 @app.function(
     image=admin_image,
     allow_concurrent_inputs=1000,
-    secrets=[modal.Secret.from_name("huggingface"), modal.Secret.from_name("supabase")],
+    secrets=[
+        modal.Secret.from_name("huggingface"),
+        modal.Secret.from_name("supabase"),
+        modal.Secret.from_name("stripe"),
+    ],
     # We keep at least one instance of the app running
     min_containers=1,
 )
@@ -351,6 +356,10 @@ def fastapi_app():
     from fastapi import FastAPI, Request
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse
+    from fastapi.exceptions import HTTPException
+    import stripe
+
+    stripe.api_key = os.environ["STRIPE_API_KEY"]
 
     web_app = FastAPI()
     supabase_client = supabase.Client(
@@ -850,6 +859,77 @@ def fastapi_app():
             public_user_data = PublicUser.model_validate(user_data.data[0])
 
         return public_user_data
+
+    @web_app.post("/stripe/webhooks")
+    async def stripe_webhook(request: Request):
+        """
+        Stripe webhook endpoint
+        TODO: return a 200 status directly for Stripe and update the database asynchronously
+        """
+        # Get the request body
+        payload = await request.body()
+        sig_header = request.headers.get("stripe-signature")
+        event = None
+
+        # Get the webhook secret from environment
+        endpoint_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
+        try:
+            event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+        except ValueError as e:
+            # Invalid payload
+            raise HTTPException(status_code=400, detail="Invalid payload")
+        except stripe.SignatureVerificationError as e:
+            # Invalid signature
+            raise HTTPException(status_code=400, detail="Invalid signature")
+
+        if (
+            event["type"] == "checkout.session.completed"
+            or event["type"] == "checkout.session.async_payment_succeeded"
+        ):
+            # Retrieve the Checkout Session from the API with line_items expanded and the metadata
+            checkout_session = stripe.checkout.Session.retrieve(
+                event["data"]["object"]["id"],
+                expand=["line_items"],
+            )
+            logger.info(f"Checkout session: {checkout_session}")
+
+            # Extract metadata fields
+            # metadata is a dict or None, so we need to handle the case where it is None
+            metadata = checkout_session.metadata or {}
+            supabase_user_email = metadata.get("supabase_user_email")
+            supabase_user_id = metadata.get("supabase_user_id")
+
+            if checkout_session.payment_status != "unpaid":
+                # If the user already exists, update the plan to pro, add the stripe customer id and the subscription id
+                if supabase_user_id:
+                    supabase_client.table("users").update(
+                        {
+                            "plan": "pro",
+                            "stripe_customer_id": checkout_session.customer,
+                            "stripe_subscription_id": checkout_session.subscription,
+                        }
+                    ).eq("id", supabase_user_id).execute()
+                    logger.info(f"Updated user {supabase_user_email} to pro")
+                else:
+                    # In the users table, create a new user with the plan to pro, add the stripe customer id and the subscription id
+                    supabase_client.table("users").insert(
+                        {
+                            "id": supabase_user_id,
+                            "plan": "pro",
+                            "stripe_customer_id": checkout_session.customer,
+                            "stripe_subscription_id": checkout_session.subscription,
+                        }
+                    ).execute()
+
+                    logger.info(f"Created new user {supabase_user_email} with plan pro")
+
+            else:
+                logger.warning(
+                    "Received a checkout session with payment status unpaid!"
+                )
+
+        return {"status": "ok"}
 
     # Required by modal
     return web_app
