@@ -118,7 +118,7 @@ Here you can:
 
 You can extend **phosphobot** by plugging in support for any custom robot. Just follow these steps to install phosphobot from source on any OS:
 
-1. **Install phosphobot from source**
+1. **Install phosphobot from source** (see instructions just above)
 
 2. **Create your robot driver**
 
