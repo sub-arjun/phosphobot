@@ -150,9 +150,7 @@ curl -X 'GET' 'http://localhost/status' -H 'accept: application/json'
 
 ## Contributing
 
-We welcome contributions!
-
-Also checkout our [bounty program](https://docs.google.com/spreadsheets/d/1NKyKoYbNcCMQpTzxbNJeoKWucPzJ5ULJkuiop4Av8ZQ/edit?gid=0#gid=0).
+We welcome contributions! Read our [contribution guide](./CONTRIBUTING.md). Also checkout our [bounty program](https://docs.google.com/spreadsheets/d/1NKyKoYbNcCMQpTzxbNJeoKWucPzJ5ULJkuiop4Av8ZQ/edit?gid=0#gid=0).
 
 Here are some of the ways you can contribute:
 
