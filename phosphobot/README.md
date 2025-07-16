@@ -113,10 +113,10 @@ You can extend **phosphobot** by plugging in support for any custom robot. Just 
    Then restart your terminal and verify that uv is in your path.
 
    ```bash
-   uv --version # should output: uv 0.7.10 
+   uv --version # should output: uv 0.7.10
    ```
 
-4. **Install nvm and Node.js.** We recommend to manage Node versions via [nvm](https://github.com/nvm-sh/nvm).
+3. **Install nvm and Node.js.** We recommend to manage Node versions via [nvm](https://github.com/nvm-sh/nvm).
 
    ```bash
    # Install nvm
@@ -135,7 +135,7 @@ You can extend **phosphobot** by plugging in support for any custom robot. Just 
    nvm install node   # “node” is an alias for the latest version
    ```
 
-5. **Build the app.** (Linux and MacOS) From the root of the repo, run:
+4. **Build the app.** (Linux and MacOS) From the root of the repo, run:
 
    ```bash
    make
@@ -144,31 +144,39 @@ You can extend **phosphobot** by plugging in support for any custom robot. Just 
    Which is a shortcut for the following command:
 
    ```
-   cd ./dashboard && ((npm i && npm run build && mkdir -p ../phosphobot/resources/dist/ && cp -r ./dist/* ../phosphobot/resources/dist/) || echo "npm command failed, continuing anyway") 
-	cd phosphobot && uv run phosphobot run --simulation=headless
+   cd ./dashboard && ((npm i && npm run build && mkdir -p ../phosphobot/resources/dist/ && cp -r ./dist/* ../phosphobot/resources/dist/) || echo "npm command failed, continuing anyway")
+   cd phosphobot && uv run phosphobot run --simulation=headless
    ```
 
    On Windows, run the full command to build the app.
 
-7. **Create your robot driver**
+5. **Create your robot driver**
 
-   1. In the directory `phosphobot/phosphobot/hardware` add a new file, e.g. `my_robot.py`. Inside, define a class inheriting from `BaseRobot`:
+   In the directory `phosphobot/phosphobot/hardware` add a new file, e.g. `my_robot.py`. Inside, define a class inheriting from `BaseRobot`:
 
-      ```python
-      from phosphobot.hardware.base import BaseRobot
+   ```python
+   from phosphobot.hardware.base import BaseRobot
 
-      class MyRobot(BaseRobot):
-          def __init__(self, config):
-              super().__init__(config)
-              # Your initialization here
+   class MyRobot(BaseRobot):
+       def __init__(self, config):
+           super().__init__(config)
+           # Your initialization here
 
-          ... # Implement the BaseRobot's abstract methods here
-      ```
+       ... # Implement the BaseRobot's abstract methods here
+   ```
 
-      We use [pybullet](https://pybullet.org/wordpress/) ([docs](https://docs.google.com/document/d/10sXEhzFRSnvFcl3XxNGhnD4N2SedqwdAvK3dsihxVUA/edit?tab=t.0)) as a robotics simulation backend. Make sure to add your robot's `urdf` in `phosphobot/resources/urdf`.
+   We use [pybullet](https://pybullet.org/wordpress/) ([docs](https://docs.google.com/document/d/10sXEhzFRSnvFcl3XxNGhnD4N2SedqwdAvK3dsihxVUA/edit?tab=t.0)) as a robotics simulation backend. Make sure to add your robot's `urdf` in `phosphobot/resources/urdf`.
 
-8. **Make your robot detectable**
+6. **Make your robot detectable**
    Open `phosphobot/phosphobot/robot.py` and locate the `RobotConnectionManager` class. Make sure your robot can be detected.
+
+7. **Try in simulation first**
+
+   1. When running phosphobot, use the `--only-simulation` flag and `config.ONLY_SIMULATION` to force the `RobotConnectionManager` to detect your robot, even if it's not connected to hardware.
+
+   2. When running phosphobot, use the `--simulation=gui` flag to display the pybullet GUI. This way, you can check if keyboard control and VR control actually work in simulation before trying it on hardware. Pay attention to the ways the joints bends and the limits set in the urdf.
+
+   Some general advice: go step by step, don't make any drastic movements, check what values you send to the motors before writing to them, keep your robot near mattresses if ever it falls, keep it away from pets, children, or expensive furniture.
 
 Build and run the app again and ensure your robot gets detected and can be moved. Happy with your changes? Open a pull request! We also recommend you look for testers on [our Discord](https://discord.gg/cbkggY6NSK).
 
