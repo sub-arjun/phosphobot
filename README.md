@@ -146,8 +146,6 @@ cd phosphobot && uv run --python 3.10 phosphobot run --simulation=headless
 curl -X 'GET' 'http://localhost/status' -H 'accept: application/json'
 ```
 
-> _Note: some features, such as connection to the phospho cloud, AI training, and AI control, are not available when installing from source._
-
 ## Contributing
 
 We welcome contributions! Read our [contribution guide](./CONTRIBUTING.md). Also checkout our [bounty program](https://docs.google.com/spreadsheets/d/1NKyKoYbNcCMQpTzxbNJeoKWucPzJ5ULJkuiop4Av8ZQ/edit?gid=0#gid=0).
