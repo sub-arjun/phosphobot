@@ -34,7 +34,7 @@ Purchase your phospho starter pack at [robots.phospho.ai](https://robots.phospho
 - [Unitree Go2 Air, Pro, Edu](https://shop.unitree.com/en-fr/products/unitree-go2) (beta)
 - [LeCabot](https://github.com/phospho-app/lecabot) (beta)
 
-See this [README](phosphobot/README.md) for more details on how to add support for a new robots or open an issue.
+See this [README](phosphobot/README.md) for more details on how to add support for a new robot.
 
 ### 2. Install the phosphobot server
 
