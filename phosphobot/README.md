@@ -98,6 +98,72 @@ For development or if you face issues with some submodule or version, you can in
 
    On Windows, run the full command to build the app.
 
+### Troubleshooting: pybullet won't compile on MacOS Silicon
+
+This is a recurring issue with Mac Silicon (M1, M2, M3, M4, etc.) [linked to pybullet](https://github.com/bulletphysics/bullet3/issues/4712).
+
+1. Make sure you followed all the previous instructions in **Install from source** until you had the pybullet compilation error.
+
+2. Sync submodules to get the patched version of pybullet. This should add files in the bullet3 folder.
+
+```bash
+git submodule update --init --depth 1
+```
+
+This adds a [forked version of pybullet](https://github.com/phospho-app/bullet3) with a modified `examples/ThirdPartyLibs/zlib/zutil.h` to comments the lines with `#define fdopen(fd, mode) NULL` that break pybullet compilation on some verisons of MacOS.
+
+3. Go to the root of this github repo. Enable the python environment created by uv
+
+```bash
+source phosphobot/.venv/bin/activate
+```
+
+4. With the environment active, build and install pybullet using `setup.py`
+
+   ```bash
+   cd bullet3
+   python setup.py build
+   python setup.py install
+   ```
+
+   Note: If you installed the XCode app, you may need to set the following flags to make the pybullet compilation work.
+
+   ```bash
+   export LDFLAGS="-L/Library/Frameworks/Python.framework/Versions/3.10/1ib"
+   export CPPFLAGS="-I/Library/Frameworks/Python.framework/Versions/3.10/include/python3.10"
+   export CPFLAGS="$CPPFLAGS"
+   ```
+
+5. Edit the `phosphobot/pyproject.toml` to uncomment the following line:
+
+```bash
+[tool.uv.sources]
+# Troubleshooting: on MacOS Silicon, you may need to compile pybullet from source.
+# If so, follow the guide in the README.md file and uncomment the line below.
+pybullet = { path = "../bullet3", editable = true } # <-- uncomment!
+```
+
+6. Run `make` again. You should now see logs similar to this. Note that the pybullet version is now tagged as `phospho version`. The date and time should also match.
+
+```bash
+      Built pybullet @ file:///Users/nicolasoulianov/robots/robots/phospho
+      Built phosphobot @ file:///Users/nicolasoulianov/robot
+Uninstalled 3 packages in 276ms
+Installed 2 packages in 2ms
+2025-07-16 23:04:07.468 | INFO     | phosphobot.main:<module>:4 - Starting phosphobot...
+sys.stdout.encoding = utf-8
+
+    ░█▀█░█░█░█▀█░█▀▀░█▀█░█░█░█▀█░█▀▄░█▀█░▀█▀
+    ░█▀▀░█▀█░█░█░▀▀█░█▀▀░█▀█░█░█░█▀▄░█░█░░█░
+    ░▀░░░▀░▀░▀▀▀░▀▀▀░▀░░░▀░▀░▀▀▀░▀▀░░▀▀▀░░▀░
+
+    phosphobot 0.3.61
+    Copyright (c) 2025 phospho https://phospho.ai
+
+2025-07-16 23:04:08.399 | DEBUG    | phosphobot.utils:get_tokens:354 - Loaded dev tokens
+pybullet build time: Jul 16 2025 23:03:57 (phospho version)
+```
+
 ## Dashboard & Control
 
 After launching the server, open your browser and navigate to:
