@@ -55,7 +55,7 @@ You will be able to control your robot with:
 - a leader arm
 - a Meta Quest if you have the phospho teleop app
 
-> _Note: port 80 might already be in use, if that's the case, the server will spin up on localhost:8080_
+> _Note: port 80 might already be in use, if that's the case, the server will spin up on localhost:8020_
 
 ### 4. Record a dataset
 
