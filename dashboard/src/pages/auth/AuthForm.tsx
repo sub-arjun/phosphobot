@@ -41,12 +41,13 @@ export function AuthForm() {
       try {
         await signup(email, password);
         toast.success(
-          "Account created! Please check your email for confirmation link.",
+          "Account created! Please check your email for email validation code.",
         );
-        navigate("/sign-in", { replace: true });
+        navigate(`/sign-up/confirm?email=${encodeURIComponent(email)}`, {
+          replace: true,
+        });
       } catch (signupErr) {
         console.error(signupErr);
-        toast.error(`Signup failed: ${signupErr || "Unknown error"}`);
       }
       setIsLoading(false);
       return;
@@ -59,7 +60,6 @@ export function AuthForm() {
         navigate(from, { replace: true });
       } catch (loginErr) {
         console.error(loginErr);
-        toast.error(`Login failed: ${loginErr || "Unknown error"}`);
       }
       setIsLoading(false);
       return;

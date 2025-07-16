@@ -62,6 +62,7 @@ INDEX_PATH = get_resources_path() / "dist" / "index.html"
 @router.get("/auth", response_class=HTMLResponse)
 @router.get("/sign-in", response_class=HTMLResponse)
 @router.get("/sign-up", response_class=HTMLResponse)
+@router.get("/sign-up/confirm", response_class=HTMLResponse)
 @router.get("/auth/confirm", response_class=HTMLResponse)
 @router.get("/auth/forgot-password", response_class=HTMLResponse)
 @router.get("/auth/reset-password", response_class=HTMLResponse)

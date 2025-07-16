@@ -7,6 +7,7 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { NetworkPage } from "@/pages/NetworkPage";
 import { ViewVideoPage } from "@/pages/ViewVideoPage";
 import { AuthForm } from "@/pages/auth/AuthForm";
+import { ConfirmCode } from "@/pages/auth/ConfirmCode";
 import { ConfirmEmail } from "@/pages/auth/ConfirmEmail";
 import { ForgotPassword } from "@/pages/auth/ForgotPassword";
 import { ProtectedRoute } from "@/pages/auth/ProtectedRoute";
@@ -47,6 +48,7 @@ function App() {
           <Route path="/auth" element={<AuthForm />} />
           <Route path="/sign-in" element={<AuthForm />} />
           <Route path="/sign-up" element={<AuthForm />} />
+          <Route path="/sign-up/confirm" element={<ConfirmCode />} />
           <Route path="/auth/confirm" element={<ConfirmEmail />} />
           <Route path="/auth/forgot-password" element={<ForgotPassword />} />
           <Route path="/auth/reset-password" element={<ResetPassword />} />

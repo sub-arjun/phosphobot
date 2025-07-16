@@ -16,7 +16,13 @@ from .lerobot_dataset import (
     LeRobotDataset,
     LeRobotEpisode,
 )
-from .robot import BaseRobot, BaseRobotConfig, BaseRobotPIDGains, RobotConfigStatus, Temperature
+from .robot import (
+    BaseRobot,
+    BaseRobotConfig,
+    BaseRobotPIDGains,
+    RobotConfigStatus,
+    Temperature,
+)
 
 
 class ServerStatus(BaseModel):
@@ -355,6 +361,7 @@ class VoltageReadResponse(BaseModel):
         description="A list of length 6, with the current voltage of each joint. If the robot is not connected, this will be None.",
     )
 
+
 class TemperatureReadResponse(BaseModel):
     """
     Response to read the Temperature of the robot.
@@ -364,6 +371,7 @@ class TemperatureReadResponse(BaseModel):
         ...,
         description=" A list of Temperature objects, one for each joint. If the robot is not connected, this will be None.",
     )
+
 
 class InfoResponse(BaseModel):
     """
@@ -897,6 +905,11 @@ class ResetPasswordRequest(BaseModel):
 class LoginCredentialsRequest(BaseModel):
     email: str
     password: str
+
+
+class VerifyEmailCodeRequest(BaseModel):
+    email: str
+    token: str
 
 
 class ConfirmRequest(BaseModel):
