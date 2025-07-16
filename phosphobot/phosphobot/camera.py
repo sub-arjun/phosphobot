@@ -21,9 +21,6 @@ from phosphobot.types import CameraTypes
 cameras = None
 
 
-MAX_OPENCV_INDEX = 10
-
-
 def get_camera_names() -> List[str]:
     """
     This function returns the list of cameras connected to the computer.
@@ -242,7 +239,9 @@ def _find_cameras(
 
 # TODO: Handle multiple realsense cameras
 def detect_video_indexes(
-    max_index_search_range=MAX_OPENCV_INDEX, mock=False, camera_names: List[str] = []
+    max_index_search_range: int | None = None,
+    mock: bool = False,
+    camera_names: List[str] = [],
 ) -> list[int]:
     """
     Return the indexes of all available cameras.
@@ -251,6 +250,11 @@ def detect_video_indexes(
 
     This is only done once and the result is cached in self._available_camera_ids
     """
+    if max_index_search_range is None:
+        from phosphobot.configs import config
+
+        max_index_search_range = config.MAX_OPENCV_INDEX
+
     cameras = []
     if platform.system() == "Linux":
         possible_ports = [str(port) for port in Path("/dev").glob("video*")]
@@ -263,9 +267,9 @@ def detect_video_indexes(
             f"(Linux) Found possible ports through scanning '/dev/video*': {possible_camera_ids}"
         )
         # Filter out indexes > MAX_OPENCV_INDEX
-        to_remove = [idx for idx in possible_camera_ids if idx > MAX_OPENCV_INDEX]
+        to_remove = [idx for idx in possible_camera_ids if idx > max_index_search_range]
         logger.info(
-            f"Ignoring possible ports: {to_remove} (index > {MAX_OPENCV_INDEX})"
+            f"Ignoring possible ports: {to_remove} (index > {max_index_search_range})"
         )
         possible_camera_ids = [
             idx for idx in possible_camera_ids if idx not in to_remove
@@ -937,6 +941,8 @@ class AllCameras:
         """
         Detect all cameras connected to the computer and initialize them.
         """
+        from phosphobot.configs import config
+
         if self._is_detecting:
             logger.warning("Cameras are already being detected, skipping")
             return
@@ -950,13 +956,13 @@ class AllCameras:
 
         if not config.ENABLE_CAMERAS:
             logger.warning("Cameras are disabled")
-            self.disabled_cameras = list(range(MAX_OPENCV_INDEX))
+            self.disabled_cameras = list(range(config.MAX_OPENCV_INDEX))
             return
 
         camera_names = get_camera_names()
         self.initialize_realsense_camera()
 
-        # Get the available video indexes from a range of 0 to MAX_OPENCV_INDEX
+        # Get the available video indexes from a range of 0 to config.MAX_OPENCV_INDEX
         possible_camera_ids = detect_video_indexes()
 
         # For every of these index we will try to detect the camera type

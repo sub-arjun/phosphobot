@@ -257,6 +257,12 @@ def run(
             help="Enable the cameras. If False, no camera will be detected. Useful in case of conflicts.",
         ),
     ] = True,
+    max_opencv_index: Annotated[
+        int,
+        typer.Option(
+            help="Maximum OpenCV index to search for cameras. Default is 10.",
+        ),
+    ] = 10,
     reload: Annotated[
         bool,
         typer.Option(
@@ -289,6 +295,7 @@ def run(
     config.PROFILE = profile
     config.TELEMETRY = telemetry
     config.ENABLE_CAN = can
+    config.MAX_OPENCV_INDEX = max_opencv_index
 
     # Start the FastAPI app using uvicorn with port retry logic
     ports = [port]

@@ -57,6 +57,7 @@ class Configuration(BaseModel):
     # Only simulation: Only use the simulation
     ONLY_SIMULATION: bool = False
     SIMULATE_CAMERAS: bool = False
+    MAX_OPENCV_INDEX: int = 10
 
     # HF token
     HF_TOKEN_VALID: bool = False
