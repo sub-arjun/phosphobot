@@ -1408,7 +1408,7 @@ class LeRobotEpisode(BaseEpisode):
                     step.observation.joints_position
                 ).any():
                     logger.warning(
-                        f"Step action in episode {self.episode_index} is None or NaN, using observation's joints_position."
+                        f"Action in episode {self.episode_index} is None or NaN, automatically filling in the value."
                     )
                     step.action = step.observation.joints_position
                 else:
@@ -1422,7 +1422,7 @@ class LeRobotEpisode(BaseEpisode):
                 # Attempt to repair the observation by using the action
                 if step.action is not None and not np.isnan(step.action).any():
                     logger.warning(
-                        f"Step observation in episode {self.episode_index} is None or NaN, using action."
+                        f"Observation in episode {self.episode_index} is None or NaN, automatically filling in the value."
                     )
                     step.observation.joints_position = step.action
                 else:
