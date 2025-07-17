@@ -84,12 +84,14 @@ function RobotStatusMenuItem({
     | undefined;
   const isTorqueEnabled = torqueStatus?.some((status) => status === 1);
 
-  // Initialize temperature values as empty when dialog opens
+  // Initializes temperature values
   useEffect(() => {
     if (isTemperatureDialogOpen && robot.temperature && !hasInitialized.current) {
-      // Initialize with empty strings for each motor
-      const emptyValues = new Array(robot.temperature.length).fill("");
-      setTemperatureValues(emptyValues);
+      // Initialize with current max values instead of empty strings
+      const initialValues = robot.temperature.map(temp => 
+        temp.max !== null ? Math.round(temp.max).toString() : ""
+      );
+      setTemperatureValues(initialValues);
       hasInitialized.current = true;
     }
     
@@ -432,7 +434,7 @@ function RobotStatusMenuItem({
         </DialogHeader>
         
         <div className="space-y-4">
-          {robot.temperature?.map((temperature, index) => {
+          {robot.temperature?.map((_, index) => {
             const inputValue = temperatureValues[index] ?? "";
             const numericValue = parseInt(inputValue) || 0;
             const isAbove70 = inputValue !== "" && numericValue > 70;
@@ -451,7 +453,6 @@ function RobotStatusMenuItem({
                     max="100"
                     value={inputValue}
                     onChange={(e) => handleTemperatureChange(index, e.target.value)}
-                    placeholder={`Current: ${temperature.current || 'N/A'}°C, Max: ${temperature.max || 'N/A'}°C`}
                     className={`flex-1 ${isAbove70 ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
                   />
                   <span className="text-sm text-muted-foreground">°C</span>
