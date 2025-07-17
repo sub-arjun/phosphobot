@@ -1431,6 +1431,21 @@ class AllCameras:
 
         return secondary_camera_key_names
 
+    def get_all_camera_key_names(self) -> List[str]:
+        """
+        Get the keys for all the cameras, including the main camera.
+        """
+        camera_key_names = []
+
+        # Add main camera key
+        if self.main_camera is not None:
+            camera_key_names.append("observation.images.main")
+
+        # Add secondary cameras keys
+        camera_key_names.extend(self.get_secondary_camera_key_names())
+
+        return camera_key_names
+
 
 @lru_cache()
 def get_all_cameras() -> AllCameras:

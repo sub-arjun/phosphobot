@@ -80,7 +80,7 @@ class LeRobotDataset(BaseDataset):
         codec: VideoCodecs | None = None,
         target_size: tuple[int, int] | None = None,
         fps: int | None = None,
-        secondary_camera_key_names: List[str] | None = None,
+        all_camera_key_names: List[str] | None = None,
         force: bool = False,
     ):
         """Loads existing meta files or initializes new ones if they don't exist."""
@@ -93,7 +93,7 @@ class LeRobotDataset(BaseDataset):
                 robots=robots,  # Passed for initialization if file doesn't exist
                 codec=codec,
                 target_size=target_size,
-                secondary_camera_key_names=secondary_camera_key_names,
+                all_camera_key_names=all_camera_key_names,
                 fps=fps,
                 format=self.format_version,
             )
@@ -1223,7 +1223,7 @@ class LeRobotEpisode(BaseEpisode):
         freq: int,
         target_size: tuple[int, int],  # width, height
         instruction: str | None,
-        secondary_camera_key_names: List[str],
+        all_camera_key_names: List[str],
         **kwargs,
     ) -> "LeRobotEpisode":
         # Ensure meta models are loaded/initialized in the dataset manager
@@ -1232,7 +1232,7 @@ class LeRobotEpisode(BaseEpisode):
             codec=codec,
             target_size=target_size,  # Used by InfoModel if creating new
             fps=freq,
-            secondary_camera_key_names=secondary_camera_key_names,
+            all_camera_key_names=all_camera_key_names,
         )
 
         # These must not be None after the above call
@@ -3402,7 +3402,7 @@ class InfoModel(BaseModel):
         codec: VideoCodecs | None = None,
         robots: List[BaseRobot] | None = None,
         target_size: tuple[int, int] | None = None,
-        secondary_camera_key_names: List[str] | None = None,
+        all_camera_key_names: List[str] | None = None,
         format: Literal["lerobot_v2", "lerobot_v2.1"] = "lerobot_v2.1",
     ) -> "InfoModel":
         """
@@ -3426,7 +3426,7 @@ class InfoModel(BaseModel):
                 raise ValueError("No fps provided to create the InfoModel")
             if target_size is None:
                 raise ValueError("No target_size provided to create the InfoModel")
-            if secondary_camera_key_names is None:
+            if all_camera_key_names is None:
                 raise ValueError(
                     "No secondary_camera_ids provided to create the InfoModel"
                 )
@@ -3437,17 +3437,9 @@ class InfoModel(BaseModel):
 
             info_model.fps = fps
 
-            info_model.features.observation_images["observation.images.main"] = (
-                VideoFeatureDetails(
-                    shape=video_shape,
-                    names=["height", "width", "channel"],
-                    info=video_info,
-                )
-            )
-
-            # Add secondary cameras
-            for secondary_camera_key_name in secondary_camera_key_names:
-                info_model.features.observation_images[secondary_camera_key_name] = (
+            # Add cameras
+            for camera_key_name in all_camera_key_names:
+                info_model.features.observation_images[camera_key_name] = (
                     VideoFeatureDetails(
                         shape=video_shape,
                         names=["height", "width", "channel"],

@@ -120,7 +120,7 @@ class Recorder:
                 freq=freq,
                 target_size=target_size,
                 instruction=instruction,
-                secondary_camera_key_names=self.cameras.get_secondary_camera_key_names(),
+                all_camera_key_names=self.cameras.get_all_camera_key_names(),
             )
         else:
             logger.error(f"Unknown episode format: {self.episode_format}")
