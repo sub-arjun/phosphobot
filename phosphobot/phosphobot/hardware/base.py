@@ -132,14 +132,14 @@ class BaseManipulator(BaseRobot):
         Read the temperature of a motor
         raise: Exception if the routine has not been implemented
         """
-        raise NotImplementedError("The robot read motor temeprature must be implemented.")
+        raise NotImplementedError("The robot read motor temperature must be implemented.")
     
     def write__group_motor_maximum_temperature(self, maximum_temperature_target: List[int]) -> None:
         """
         Write the maximum temperature of all motors of a robot.
         raise: Exception if the routine has not been implemented
         """
-        raise NotImplementedError("The robot write group motor temeprature must be implemented.")
+        raise NotImplementedError("The robot write group motor temperature must be implemented.")
 
     @abstractmethod
     def write_motor_position(self, servo_id: int, units: int, **kwargs) -> None:
