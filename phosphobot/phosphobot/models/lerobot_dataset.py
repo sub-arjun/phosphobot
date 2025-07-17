@@ -205,8 +205,9 @@ class LeRobotDataset(BaseDataset):
         If update_hub is True, also delete the episode data from the Hugging Face repository
         """
 
+        episode_data_path = self.get_episode_data_path(episode_id)
         episode_to_delete = LeRobotEpisode.from_parquet(
-            self.get_episode_data_path(episode_id),
+            episode_data_path=episode_data_path,
             format=self.format_version,
             dataset_path=self.data_folder_full_path,
         )
@@ -224,8 +225,9 @@ class LeRobotDataset(BaseDataset):
             update_hub = False
 
         logger.info(
-            f"Deleting episode {episode_id} from dataset {self.dataset_name} with episode format {self.format_version}"
+            f"Deleting episode {episode_to_delete.episode_index} {episode_data_path} from dataset {self.dataset_name} with episode format {self.format_version}"
         )
+        logger.debug(f"update_hub: {update_hub}")
 
         # Start loading current meta data
         info_model = InfoModel.from_json(meta_folder_path=self.meta_folder_full_path)
@@ -269,7 +271,7 @@ class LeRobotDataset(BaseDataset):
         logger.info("Info model updated")
 
         # Delete the actual episode files (parquet and mp4 video)
-        episode_to_delete.delete(update_hub=update_hub)
+        episode_to_delete.delete(update_hub=update_hub, repo_id=self.repo_id)
 
         # Rename the remaining episodes to keep the numbering consistent
         # be sure to reindex AFTER deleting the episode data
@@ -1502,6 +1504,7 @@ class LeRobotEpisode(BaseEpisode):
         Load an episode data file. We only extract the information from the parquet data file.
         TODO(adle): Add more information in the Episode when loading from parquet data file from metafiles and videos
         """
+        logger.debug(f"Loading episode from {episode_data_path} with format {format}")
         # Check that the file exists
         if not os.path.exists(episode_data_path):
             raise FileNotFoundError(f"Episode file {episode_data_path} not found.")
@@ -1604,16 +1607,21 @@ class LeRobotEpisode(BaseEpisode):
 
         # Delete the parquet file
         try:
+            logger.debug(f"Deleting parquet file {self._parquet_path}")
             os.remove(self._parquet_path)
         except FileNotFoundError:
             logger.warning(
                 f"Parquet file {self._parquet_path} not found. Skipping deletion."
             )
 
+        logger.debug(f"Episode deletion repo_id: {repo_id}, update_hub: {update_hub}")
         if update_hub and repo_id is not None:
             # In the huggingface dataset, we need to pass the relative path.
             relative_episode_path = (
                 f"data/chunk-000/episode_{self.episode_index:06d}.parquet"
+            )
+            logger.debug(
+                f"Deleting parquet file {relative_episode_path} from Hugging Face repo {repo_id}"
             )
             delete_file(
                 repo_id=repo_id,
@@ -1628,16 +1636,20 @@ class LeRobotEpisode(BaseEpisode):
                 if "image" not in camera_key:
                     continue
                 try:
-                    os.remove(self._get_video_path(camera_key))
+                    video_path = self._get_video_path(camera_key)
+                    logger.debug(f"Deleting video file {video_path}")
+                    os.remove(video_path)
                 except FileNotFoundError:
                     logger.warning(
                         f"Video file {self._get_video_path(camera_key)} not found. Skipping deletion."
                     )
                 if update_hub and repo_id is not None:
+                    path_in_repo = f"videos/chunk-000/{camera_key}/episode_{self.episode_index:06d}.mp4"
+                    logger.debug(
+                        f"Deleting video file {path_in_repo} from Hugging Face repo {repo_id}"
+                    )
                     delete_file(
-                        repo_id=repo_id,
-                        path_in_repo=f"videos/chunk-000/{camera_key}/episode_{self.episode_index:06d}.mp4",
-                        repo_type="dataset",
+                        repo_id=repo_id, path_in_repo=path_in_repo, repo_type="dataset"
                     )
         else:
             logger.warning(
