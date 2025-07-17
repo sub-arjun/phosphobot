@@ -4,6 +4,7 @@ from loguru import logger
 from phosphobot.models import Observation, Step
 from phosphobot.hardware import BaseRobot
 from phosphobot.camera import AllCameras
+from phosphobot.utils import get_quaternion_from_euler
 
 class RerunVisualizer:
     def __init__(self, enable: bool = True):
@@ -50,7 +51,7 @@ class RerunVisualizer:
             
             self._log_camera_data(observation)
             self._log_robot_data(observation, robots)
-            self._log_joint_timeseries(observation, step_index)
+            self._log_joint_timeseries(observation, robots)
             
             if observation.language_instruction:
                 rr.log(
@@ -92,59 +93,7 @@ class RerunVisualizer:
                         )
                     )
 
-    def _log_robot_data(self, observation: Observation, robots: List[BaseRobot]) -> None:
-        """Log robot state and end-effector positions."""
-        # Log end-effector state if available (7D: x,y,z,rx,ry,rz,gripper)
-        if observation.state is not None and len(observation.state) >= 3:
-            state = observation.state
-            
-            # Extract position (first 3 elements) - convert cm to meters
-            position = state[:3] / 100.0
-            
-            rr.log(
-                "world/robot/end_effector",
-                rr.Points3D(
-                    positions=[position],
-                    colors=[255, 100, 100], 
-                    radii=[0.02]  # 2cm radius
-                )
-            )
-            
-            # Extract orientation if available (elements 3-6 as euler angles in degrees)
-            if len(state) >= 6:
-                euler_angles = state[3:6]  # rx, ry, rz in degrees
-
-                euler_rad = np.deg2rad(euler_angles)
-                roll, pitch, yaw = euler_rad
-                
-                # Euler to quaternion 
-                qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
-                qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
-                qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
-                qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
-                
-                rr.log(
-                    "world/robot/end_effector",
-                    rr.Transform3D(
-                        translation=position,
-                        rotation=rr.Quaternion(xyzw=[qx, qy, qz, qw])
-                    )
-                )
-            
-            # Log gripper state if available (element 6)
-            if len(state) >= 7:
-                gripper_state = state[6]
-                color = [100, 255, 100] if gripper_state > 0.5 else [255, 100, 100]  # Green if open, red if closed
-                rr.log(
-                    "world/robot/gripper",
-                    rr.Points3D(
-                        positions=[position + np.array([0, 0, 0.05])],  # Slightly above end-effector
-                        colors=[color],
-                        radii=[0.01]
-                    )
-                )
-
-        # Log individual joint positions 
+    def _log_robot_data(self, observation: Observation, robots: List[BaseRobot]) -> None:        
         if observation.joints_position is not None and len(observation.joints_position) > 0:
             joints = observation.joints_position
             
@@ -168,13 +117,18 @@ class RerunVisualizer:
                     rr.Points3D(
                         positions=joint_positions,
                         colors=joint_colors,
-                        radii=[0.015] * len(joint_positions) 
+                        radii=[0.015] * len(joint_positions)
                     )
                 )
 
-    def _log_joint_timeseries(self, observation: Observation, step_index: int) -> None:
+    def _log_joint_timeseries(self, observation: Observation, robots: List[BaseRobot]) -> None:
         if observation.joints_position is not None and len(observation.joints_position) > 0:
             joints = observation.joints_position
+            
+            # Get the number of actuated joints from the robot 
+            num_actuated_joints = 6  # Default fallback
+            if robots and hasattr(robots[0], 'num_actuated_joints'):
+                num_actuated_joints = robots[0].num_actuated_joints
             
             for i, joint_angle in enumerate(joints):
                 rr.log(
@@ -182,8 +136,9 @@ class RerunVisualizer:
                     rr.Scalars([joint_angle])
                 )
             
-            if observation.state is not None and len(observation.state) >= 7:
-                gripper_state = observation.state[6]
+            # Log gripper state if we have more joints than the actuated ones
+            if len(joints) > num_actuated_joints:
+                gripper_state = joints[num_actuated_joints]  # First joint after actuated ones
                 rr.log("plots/gripper", rr.Scalars([gripper_state]))
 
     def finalize(self) -> None:
@@ -191,6 +146,6 @@ class RerunVisualizer:
             return
             
         try:
-            logger.info("Rerun completed")
+            logger.info("Rerun visualization completed")
         except Exception as e:
-            logger.warning(f"Error when running: {e}") 
+            logger.warning(f"Error finalizing Rerun: {e}") 
