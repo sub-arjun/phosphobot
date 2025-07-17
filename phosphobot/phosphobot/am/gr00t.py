@@ -851,16 +851,19 @@ class Gr00tTrainerConfig(BaseTrainerConfig):
     model_type: Literal["gr00t"] = "gr00t"
     training_params: TrainingParamsGr00T
 
-def check_for_nans_in_value(value):
+def check_for_nans_null_in_value(value):
     """
     Check if a value contains NaN/null, including nested lists
     """
-    if pd.isna(value):
+    if pd.isna(value).any():
         return True
     
+    if pd.isnull(value).any():
+        return True
+
     if isinstance(value, (list, tuple)):
         for item in value:
-            if check_for_nans_in_value(item):
+            if check_for_nans_null_in_value(item):
                 return True
     
     return False
@@ -903,12 +906,12 @@ def check_parquet_files(folder_path):
             problematic_rows = []
             
             for idx, value in enumerate(df['action']):
-                if check_for_nans_in_value(value):
+                if check_for_nans_null_in_value(value):
                     issues_found += 1
                     problematic_rows.append(idx)
 
             for idx, value in enumerate(df['observation.state']):
-                if check_for_nans_in_value(value):
+                if check_for_nans_null_in_value(value):
                     issues_found += 1
                     problematic_rows.append(idx)
 
@@ -1143,7 +1146,7 @@ class Gr00tTrainer(BaseTrainer):
                     )
                 
         # Check the dataset for null/nan values in action/observation columns
-        check_parquet_files(DATASET_PATH)
+        check_parquet_files(DATASET_PATH / "data" / "chunk-000")
 
         resized_successful, _ = resize_dataset(
             dataset_root_path=DATASET_PATH, resize_to=(224, 224)
