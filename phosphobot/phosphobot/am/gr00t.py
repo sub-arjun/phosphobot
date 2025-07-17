@@ -11,8 +11,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Literal, Tuple
 
 import cv2
-import numpy as np
 import zmq
+import numpy as np
+import pandas as pd
 from fastapi import HTTPException
 from huggingface_hub import HfApi, snapshot_download
 from loguru import logger
@@ -850,6 +851,84 @@ class Gr00tTrainerConfig(BaseTrainerConfig):
     model_type: Literal["gr00t"] = "gr00t"
     training_params: TrainingParamsGr00T
 
+def check_for_nans_null_in_value(value):
+    """
+    Check if a value contains NaN/null, including nested lists
+    """
+    if pd.isna(value).any():
+        return True
+    
+    if pd.isnull(value).any():
+        return True
+
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            if check_for_nans_null_in_value(item):
+                return True
+    
+    return False
+
+def check_parquet_files(folder_path):
+    """
+    Check all parquet files in a folder for NaN/null values in the action/observation column
+
+    Will raise an error if it finds any NaN/null values in the action/observation column.
+    """
+    folder_path = Path(folder_path)
+    
+    if not folder_path.exists():
+        raise FileNotFoundError(f"Folder '{folder_path}' does not exist.")
+    
+    # Find all parquet files
+    parquet_files = list(folder_path.glob("*.parquet"))
+    
+    if not parquet_files:
+        raise FileNotFoundError(f"No parquet files found in '{folder_path}'")
+
+    print(f"Found {len(parquet_files)} parquet file(s) to check:")
+    print("-" * 50)
+    
+    total_issues = 0
+    
+    for file_path in parquet_files:
+        try:
+            # Read the parquet file
+            df = pd.read_parquet(file_path)
+            
+            # Check if action column exists
+            if 'action' not in df.columns:
+                raise ValueError(f"File '{file_path.name}' does not contain 'action' column.")
+            if "observation.state" not in df.columns:
+                raise ValueError(f"File '{file_path.name}' does not contain 'observation.state' column.")
+            
+            # Check for issues in the action column
+            issues_found = 0
+            problematic_rows = []
+            
+            for idx, value in enumerate(df['action']):
+                if check_for_nans_null_in_value(value):
+                    issues_found += 1
+                    problematic_rows.append(idx)
+
+            for idx, value in enumerate(df['observation.state']):
+                if check_for_nans_null_in_value(value):
+                    issues_found += 1
+                    problematic_rows.append(idx)
+
+            if issues_found > 0:
+                print(f"❌ {file_path.name}: Found {issues_found} rows with NaN/null in action column")
+                print(f"   Problematic rows: {problematic_rows[:10]}{'...' if len(problematic_rows) > 10 else ''}")
+                total_issues += issues_found
+            else:
+                print(f"✅ {file_path.name}: No NaN/null values found in action column")
+                
+        except Exception as e:
+            print(f"❌ {file_path.name}: Error reading file - {str(e)}")
+    
+    print("-" * 50)
+    print(f"Total issues found across all files: {total_issues}")
+    if total_issues > 0:
+        raise ValueError(f"Found {total_issues} NaN/null values in action/observation columns across all files. Please fix the data before re-training.")
 
 def generate_modality_json(data_dir) -> tuple[int, int]:
     # Load the metadata file to get image keys
@@ -1065,6 +1144,9 @@ class Gr00tTrainer(BaseTrainer):
                     raise RuntimeError(
                         f"Failed to download dataset {self.config.dataset_name} after {max_retries} attempts, is Hugging Face down ? : {e}"
                     )
+                
+        # Check the dataset for null/nan values in action/observation columns
+        check_parquet_files(DATASET_PATH / "data" / "chunk-000")
 
         resized_successful, _ = resize_dataset(
             dataset_root_path=DATASET_PATH, resize_to=(224, 224)

@@ -1400,6 +1400,36 @@ class LeRobotEpisode(BaseEpisode):
             self.dataset_manager.info_model is not None
         )  # Should have been initialized
 
+        # Sanity check: make sure the actions and observations don't have any null or nan values
+        for step in self.steps:
+            if step.action is None or np.isnan(step.action).any():
+                # Attempt to repair the action by using the observation's joints_position
+                if step.observation.joints_position is not None and not np.isnan(
+                    step.observation.joints_position
+                ).any():
+                    logger.warning(
+                        f"Action in episode {self.episode_index} is None or NaN, automatically filling in the value."
+                    )
+                    step.action = step.observation.joints_position
+                else:
+                    raise ValueError(
+                        f"Step action in episode {self.episode_index} is None or NaN"
+                    )
+            if (
+                step.observation.joints_position is None
+                or np.isnan(step.observation.joints_position).any()
+            ):
+                # Attempt to repair the observation by using the action
+                if step.action is not None and not np.isnan(step.action).any():
+                    logger.warning(
+                        f"Observation in episode {self.episode_index} is None or NaN, automatically filling in the value."
+                    )
+                    step.observation.joints_position = step.action
+                else:
+                    raise ValueError(
+                        f"Step observation in episode {self.episode_index} is None or NaN"
+                    )
+
         # 1. Save Parquet data for the episode
         lerobot_parquet_model = self._convert_to_le_robot_episode_model()
         lerobot_parquet_model.to_parquet(str(self._parquet_path))
