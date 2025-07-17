@@ -372,6 +372,16 @@ class TemperatureReadResponse(BaseModel):
         description=" A list of Temperature objects, one for each joint. If the robot is not connected, this will be None.",
     )
 
+class TemperatureWriteRequest(BaseModel):
+    """
+    Request to set the maximum Temperature for joints of the robot.
+    """
+
+    maximum_temperature: List[int] = Field(
+        ...,
+        description="A list with the maximum temperature of each joint. The length of the list must be equal to the number of joints.",
+    )
+    
 
 class InfoResponse(BaseModel):
     """
