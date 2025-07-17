@@ -575,7 +575,7 @@ async def read_temperature(
     )
 
 @router.post(
-    "/Temperature/write",
+    "/temperature/write",
     response_model=StatusResponse,
     summary="Write the Maximum Temperature for Joints",
     description="Set the robot's maximum temperature for motors..",

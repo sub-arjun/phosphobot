@@ -366,6 +366,7 @@ class SO100Hardware(BaseManipulator):
             self.motors_bus.write(
                 "Max_Temperature_Limit", values=values, motor_names=motor_names
             )
+            self._max_temperature_cache = {}
             self.motor_communication_errors = 0
         except Exception as e:
             logger.warning(f"Error writing motor temperature: {e}")
