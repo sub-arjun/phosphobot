@@ -595,9 +595,6 @@ async def write_temperature(
             status_code=400,
             detail="Robot does not support setting motor temperature",
         )
-    logger.debug(
-        f"Setting maximum temperature to {request.maximum_temperature} for robot {robot.name}"
-    )
     robot.set_maximum_temperature(
         maximum_temperature_target=request.maximum_temperature
     )
