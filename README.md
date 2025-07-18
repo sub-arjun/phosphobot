@@ -12,13 +12,15 @@
 
 ## Overview of phospho
 
-- 🕹️ Control your robot with the keyboard, a leader arm, a Meta Quest headset or via API
-- 📹 Teleoperate robots to record datasets in LeRobot dataset format
-- 🤖 Train action models like ACT, gr00t n1 or Pi0
-- 🔥 Use action models to control robots
-- 💻 Runs on macOS, Linux and Windows
-- 🦾 Compatible with the SO-100, SO-101, WX-250 and AgileX Piper
-- 🔧 Extend it with your own robots and cameras
+- 🕹️ Control your robots to record datasets in minutes with a keyboard, a gamepad, a leader arm, and more
+- ⚡ Train Action models such as ACT, π0 or gr00t-n1 with one command
+- 🦾 Compatible with the SO-100, SO-101, Unitree Go2, Agilex Piper...
+- 🚪 Dev-friendly API
+- 🤗 Fully compatible with LeRobot and HuggingFace
+- 🖥️ Runs on macOS, Linux and Windows
+- 🥽 Meta Quest app for teleoperation
+- 📸 Supports most cameras (classic, depth, stereo)
+- 🔌 Open Source: [Extend it with your own robots and cameras](https://github.com/phospho-app/phosphobot/tree/main/phosphobot)
 
 ## Getting started with phosphobot
 
