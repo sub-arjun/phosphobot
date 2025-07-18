@@ -839,6 +839,11 @@ export function GamepadControl() {
             openStateRef.current = gripperValue;
           }
 
+          /*
+          const currentRobot = serverStatus?.robot_status.find(
+            (r) => r.device_name === selectedRobotName,
+          );*/ 
+
           // Apply speed scaling to all robot types
           deltaX *= selectedSpeed;
           deltaY *= selectedSpeed;

@@ -447,13 +447,7 @@ export function KeyboardControl() {
                           rz: move.rz * selectedSpeed,
                           open: openStateRef.current,
                         };
-                        // Apply speed for mobile robots here too if single step UI clicks should be speed-sensitive
-                        if (isMobileRobot) {
-                          data.x = selectedSpeed;
-                          data.y = selectedSpeed;
-                          // rz = 0.6 is a 90° degree rotation
-                          data.rz = selectedSpeed * 0.5;
-                        }
+
                         postData(BASE_URL + "move/relative", data, {
                           robot_id: robotIDFromName(selectedRobotName),
                         });
