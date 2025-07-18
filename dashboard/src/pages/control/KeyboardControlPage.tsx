@@ -198,18 +198,13 @@ export function KeyboardControl() {
             }
           });
 
-          // Apply speed scaling for mobile robots
-          const currentRobot = serverStatus?.robot_status.find(
-            (r) => r.device_name === selectedRobotName,
-          );
-          const isMobile = currentRobot?.robot_type === "mobile";
-
-          if (isMobile) {
-            deltaX *= selectedSpeed;
-            deltaY *= selectedSpeed; // Assuming Y might be used for strafing
-            deltaRZ *= selectedSpeed; // Scale turning speed
-            // deltaZ, deltaRX, deltaRY are typically not scaled by mobile base speed
-          }
+          // Apply speed scaling to all robot types
+          deltaX *= selectedSpeed;
+          deltaY *= selectedSpeed;
+          deltaZ *= selectedSpeed;
+          deltaRX *= selectedSpeed;
+          deltaRY *= selectedSpeed;
+          deltaRZ *= selectedSpeed;
 
           if (didToggleOpen) {
             openStateRef.current = openStateRef.current > 0.99 ? 0 : 1;
@@ -350,12 +345,6 @@ export function KeyboardControl() {
   if (serverError) return <div>Failed to load server status.</div>; // Handle error case
   if (!serverStatus) return <LoadingPage />;
 
-  // Determine current robot type for conditional rendering
-  const selectedRobot = serverStatus.robot_status.find(
-    (robot) => robot.device_name === selectedRobotName,
-  );
-  const isMobileRobot = selectedRobot?.robot_type === "mobile";
-
   return (
     <div className="container mx-auto px-4 py-6 space-y-8">
       <Card>
@@ -411,16 +400,14 @@ export function KeyboardControl() {
                 Start Moving Robot
               </Button>
             )}
-            {isMobileRobot && (
-              <SpeedSelect
-                defaultValue={selectedSpeed} // Current speed state from RobotControllerPage
-                onChange={(newSpeed) => setSelectedSpeed(newSpeed)}
-                title="Movement speed"
-                minSpeed={0.1} // Specific min for mobile robots
-                maxSpeed={1.0} // Specific max for mobile robots
-                step={0.1} // Specific step for mobile robots
-              />
-            )}
+            <SpeedSelect
+              defaultValue={selectedSpeed}
+              onChange={(newSpeed) => setSelectedSpeed(newSpeed)}
+              title="Movement speed"
+              minSpeed={0.1}
+              maxSpeed={2.0} // Allow faster speeds for all robot types
+              step={0.1}
+            />
           </div>
         </CardContent>
       </Card>
@@ -452,21 +439,15 @@ export function KeyboardControl() {
                         KEY_MAPPINGS[control.key];
                       if (move) {
                         const data = {
-                          x: move.x,
-                          y: move.y,
-                          z: move.z,
-                          rx: move.rx,
-                          ry: move.ry,
-                          rz: move.rz,
+                          x: move.x * selectedSpeed,
+                          y: move.y * selectedSpeed,
+                          z: move.z * selectedSpeed,
+                          rx: move.rx * selectedSpeed,
+                          ry: move.ry * selectedSpeed,
+                          rz: move.rz * selectedSpeed,
                           open: openStateRef.current,
                         };
-                        // Apply speed for mobile robots here too if single step UI clicks should be speed-sensitive
-                        if (isMobileRobot) {
-                          data.x = selectedSpeed;
-                          data.y = selectedSpeed;
-                          // rz = 0.6 is a 90° degree rotation
-                          data.rz = selectedSpeed * 0.5;
-                        }
+
                         postData(BASE_URL + "move/relative", data, {
                           robot_id: robotIDFromName(selectedRobotName),
                         });
