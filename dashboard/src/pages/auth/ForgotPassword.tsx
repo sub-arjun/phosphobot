@@ -50,7 +50,7 @@ export function ForgotPassword() {
             <Button
               type="submit"
               variant="outline"
-              className="w-full cursor-pointer"
+              className="w-full"
               disabled={isLoading}
             >
               {isLoading ? (

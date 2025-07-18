@@ -409,7 +409,7 @@ export function AIControlPage() {
                     disabled={aiStatus?.status !== "stopped"}
                     emptyMessage="Make sure this is a public model available on Hugging Face."
                   />
-                  <Button variant="outline" className="cursor-pointer" asChild>
+                  <Button variant="outline" asChild>
                     <a
                       href={
                         selectedModelType === "gr00t"
@@ -500,7 +500,6 @@ export function AIControlPage() {
                   />
                   <Button
                     onClick={startControlByAI}
-                    className="cursor-pointer"
                     disabled={
                       aiStatus?.status !== "stopped" ||
                       !modelId.trim() ||

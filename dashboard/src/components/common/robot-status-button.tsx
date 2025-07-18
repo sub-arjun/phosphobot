@@ -437,7 +437,7 @@ export function RobotStatusDropdown() {
     return (
       <Button
         variant="outline"
-        className="flex items-center gap-2 relative cursor-pointer bg-transparent"
+        className="flex items-center gap-2 relative bg-transparent"
       >
         <LoaderCircle className="animate-spin size-5" />
       </Button>

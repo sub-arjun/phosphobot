@@ -217,11 +217,7 @@ function AIModelsCard() {
             >
               Cancel
             </Button>
-            <Button
-              variant="default"
-              onClick={onProceed}
-              className=" cursor-pointer"
-            >
+            <Button variant="default" onClick={onProceed}>
               I Understand the Risks
             </Button>
           </DialogFooter>
@@ -277,7 +273,7 @@ export function DashboardPage() {
               <div className="flex-1/2">
                 <Button
                   variant="default"
-                  className="w-full h-full cursor-pointer"
+                  className="w-full h-full"
                   disabled={!robotConnected}
                   onClick={() => {
                     if (!robotConnected) return;
