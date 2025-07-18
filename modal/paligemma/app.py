@@ -28,7 +28,7 @@ FUNCTION_TIMEOUT = 300  # seconds
 
 
 class ObjectDetectionProcessor:
-    def __init__(self, model_path: str = "google/paligemma2-10b-mix-224"):
+    def __init__(self, model_path: str = "google/paligemma-3b-mix-224"):
         import torch
         from transformers import AutoProcessor, PaliGemmaForConditionalGeneration
 
@@ -40,7 +40,7 @@ class ObjectDetectionProcessor:
             logger.error("Hugging Face token not found in environment variables.")
             raise ValueError("Hugging Face token is required for model access.")
 
-        cache_dir = "/data/paligemma2-10b-mix-224"
+        cache_dir = "/data/paligemma-3b-mix-224"
 
         # Load processor & model
         self.processor = AutoProcessor.from_pretrained(
@@ -81,9 +81,9 @@ class ObjectDetectionProcessor:
         """Detect object in image based on instruction."""
         import torch
 
-        assert len(images) == len(instructions), (
-            f"Number of images ({len(images)}) and instructions ({len(instructions)}) must be the same"
-        )
+        assert (
+            len(images) == len(instructions)
+        ), f"Number of images ({len(images)}) and instructions ({len(instructions)}) must be the same"
 
         try:
             for image in images:
