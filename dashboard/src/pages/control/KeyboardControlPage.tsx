@@ -50,7 +50,7 @@ export function KeyboardControl() {
   const [selectedRobotName, setSelectedRobotName] = useState<string | null>(
     null,
   );
-  const [selectedSpeed, setSelectedSpeed] = useState<number>(0.5); // State for speed
+  const [selectedSpeed, setSelectedSpeed] = useState<number>(0.8); // State for speed
 
   // Refs to manage our control loop and state
   const keysPressedRef = useRef(new Set<string>());

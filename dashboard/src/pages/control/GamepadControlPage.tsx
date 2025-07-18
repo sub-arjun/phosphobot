@@ -377,7 +377,7 @@ export function GamepadControl() {
   const [selectedRobotName, setSelectedRobotName] = useState<string | null>(
     null,
   );
-  const [selectedSpeed, setSelectedSpeed] = useState<number>(0.5);
+  const [selectedSpeed, setSelectedSpeed] = useState<number>(0.8);
   const [gamepadConnected, setGamepadConnected] = useState(false);
   const [gamepadIndex, setGamepadIndex] = useState<number | null>(null);
   const [autoStartTriggered, setAutoStartTriggered] = useState(false);
@@ -1136,7 +1136,6 @@ export function GamepadControl() {
               maxSpeed={2.0} // Allow faster speeds for all robot types
               step={0.1}
             />
-
           </div>
         </CardContent>
       </Card>
