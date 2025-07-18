@@ -1,20 +1,18 @@
 import numpy as np
 from typing import Optional, List
 from loguru import logger
+import rerun as rr
+
 from phosphobot.models import Observation, Step
 from phosphobot.hardware import BaseRobot
 from phosphobot.camera import AllCameras
 from phosphobot.utils import get_quaternion_from_euler
 
 class RerunVisualizer:
-    def __init__(self, enable: bool = True):
-        self.enabled = enable and RERUN_AVAILABLE
+    def __init__(self):
         self.initialized = False
             
     def initialize(self, dataset_name: str, episode_index: int) -> None:
-        if not self.enabled:
-            return
-            
         try:
             app_name = f"phosphobot_{dataset_name}_ep{episode_index}"
             rr.init(app_name, spawn=True)
@@ -30,7 +28,6 @@ class RerunVisualizer:
             
         except Exception as e:
             logger.error(f"Failed to initialize Rerun: {e}")
-            self.enabled = False
 
     def log_step(
         self,
@@ -39,7 +36,7 @@ class RerunVisualizer:
         cameras: AllCameras,
         step_index: int,
     ) -> None:
-        if not self.enabled or not self.initialized:
+        if not self.initialized:
             return
             
         try:
@@ -50,7 +47,6 @@ class RerunVisualizer:
             rr.set_time("step", sequence=step_index)
             
             self._log_camera_data(observation)
-            self._log_robot_data(observation, robots)
             self._log_joint_timeseries(observation, robots)
             
             if observation.language_instruction:
@@ -93,56 +89,20 @@ class RerunVisualizer:
                         )
                     )
 
-    def _log_robot_data(self, observation: Observation, robots: List[BaseRobot]) -> None:        
-        if observation.joints_position is not None and len(observation.joints_position) > 0:
-            joints = observation.joints_position
-            
-            joint_positions = []
-            joint_colors = []
-            
-            for i, joint_angle in enumerate(joints):
-                x_pos = i * 0.1  # 10cm spacing
-                y_pos = 0
-                z_pos = 0.5  # 50cm height
-                
-                joint_positions.append([x_pos, y_pos, z_pos])
-                
-                normalized_angle = (joint_angle + np.pi) / (2 * np.pi)  # Normalize -π to π -> 0 to 1
-                color_intensity = int(255 * normalized_angle)
-                joint_colors.append([color_intensity, 100, 255 - color_intensity])
-            
-            if joint_positions:
-                rr.log(
-                    "world/robot/joints",
-                    rr.Points3D(
-                        positions=joint_positions,
-                        colors=joint_colors,
-                        radii=[0.015] * len(joint_positions)
-                    )
-                )
+
 
     def _log_joint_timeseries(self, observation: Observation, robots: List[BaseRobot]) -> None:
         if observation.joints_position is not None and len(observation.joints_position) > 0:
             joints = observation.joints_position
-            
-            # Get the number of actuated joints from the robot 
-            num_actuated_joints = 6  # Default fallback
-            if robots and hasattr(robots[0], 'num_actuated_joints'):
-                num_actuated_joints = robots[0].num_actuated_joints
             
             for i, joint_angle in enumerate(joints):
                 rr.log(
                     f"plots/joint_{i}",
                     rr.Scalars([joint_angle])
                 )
-            
-            # Log gripper state if we have more joints than the actuated ones
-            if len(joints) > num_actuated_joints:
-                gripper_state = joints[num_actuated_joints]  # First joint after actuated ones
-                rr.log("plots/gripper", rr.Scalars([gripper_state]))
 
     def finalize(self) -> None:
-        if not self.enabled or not self.initialized:
+        if not self.initialized:
             return
             
         try:

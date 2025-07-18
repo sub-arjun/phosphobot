@@ -53,8 +53,7 @@ class Recorder:
     def __init__(self, robots: list[BaseRobot], cameras: AllCameras):
         self.robots = robots
         self.cameras = cameras
-        # rerun visualizer disable by default
-        self.rerun_visualizer = RerunVisualizer(enable=False)
+        self.rerun_visualizer = RerunVisualizer()
 
     async def start(
         self,
