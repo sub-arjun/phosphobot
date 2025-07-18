@@ -1,6 +1,6 @@
 import asyncio
 import time
-from typing import Literal, Optional
+from typing import Literal, Optional, List
 
 import numpy as np
 from loguru import logger
@@ -349,6 +349,27 @@ class SO100Hardware(BaseManipulator):
             )  # unit is Celsius
         except Exception as e:
             logger.warning(f"Error reading motor temperature for servo {servo_id}: {e}")
+            self.update_motor_errors()
+            return None
+    
+    def write__group_motor_maximum_temperature(
+        self, maximum_temperature_target: List[int],  **kwargs
+    ) -> None:
+        """
+        Write the maximum temperature of all motors of a robot.
+        """
+        if not self.is_connected:
+            return None
+        values = maximum_temperature_target
+        motor_names = list(self.motors.keys())
+        try:
+            self.motors_bus.write(
+                "Max_Temperature_Limit", values=values, motor_names=motor_names
+            )
+            self._max_temperature_cache = {}
+            self.motor_communication_errors = 0
+        except Exception as e:
+            logger.warning(f"Error writing motor temperature: {e}")
             self.update_motor_errors()
             return None
 

@@ -46,7 +46,8 @@ from phosphobot.models import (
     TorqueReadResponse,
     UDPServerInformationResponse,
     VoltageReadResponse,
-    TemperatureReadResponse
+    TemperatureReadResponse,
+    TemperatureWriteRequest
 )
 from phosphobot.robot import (
     RemotePhosphobot,
@@ -572,6 +573,34 @@ async def read_temperature(
     return TemperatureReadResponse(
         current_max_Temperature=temperature,
     )
+
+@router.post(
+    "/temperature/write",
+    response_model=StatusResponse,
+    summary="Write the Maximum Temperature for Joints",
+    description="Set the robot's maximum temperature for motors..",
+)
+async def write_temperature(
+    request: TemperatureWriteRequest,
+    robot_id: int = 0,
+    rcm: RobotConnectionManager = Depends(get_rcm),
+) -> StatusResponse:
+    """
+    Set the robot's maximum temperature for motors.
+    """
+    robot = await rcm.get_robot(robot_id)
+    if not hasattr(robot, "set_maximum_temperature"):
+        raise HTTPException(
+            status_code=400,
+            detail="Robot does not support setting motor temperature",
+        )
+
+    robot = cast(BaseManipulator, robot)
+    robot.set_maximum_temperature(
+        maximum_temperature_target=request.maximum_temperature
+    )
+
+    return StatusResponse()
 
 @router.post(
     "/torque/read",
