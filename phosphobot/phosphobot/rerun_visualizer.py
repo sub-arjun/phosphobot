@@ -1,11 +1,15 @@
 import numpy as np
-import rerun as rr
 from typing import List
 from loguru import logger
 
 from phosphobot.camera import AllCameras
 from phosphobot.hardware import BaseRobot
 from phosphobot.models import Observation, Step
+
+try:
+    import rerun as rr
+except ImportError:
+    rr = None
 
 
 class RerunVisualizer:
