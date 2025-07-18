@@ -93,7 +93,7 @@ class TrainingParamsAct(BaseModel):
         default=None,
         description="Number of training steps, leave it to None to auto-detect based on your dataset",
         gt=0,
-        le=10_000,
+        le=1_000_000,
     )
 
     class Config:
