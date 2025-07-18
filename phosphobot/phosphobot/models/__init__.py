@@ -542,6 +542,10 @@ class RecordingStartRequest(BaseModel):
         description="List of robot serial ids to ignore. If set to None, records all available robots.",
         examples=[["/dev/ttyUSB0"]],
     )
+    enable_rerun_visualization: bool = Field(
+        False,
+        description="Enable rerun", 
+    )
 
 
 class RecordingStopRequest(BaseModel):
