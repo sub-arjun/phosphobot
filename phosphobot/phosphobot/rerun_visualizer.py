@@ -7,9 +7,11 @@ from phosphobot.hardware import BaseRobot
 from phosphobot.models import Observation, Step
 
 try:
-    import rerun as rr
+    import rerun
 except ImportError:
-    rr = None
+    rerun = None
+
+rr = rerun
 
 
 class RerunVisualizer:

@@ -8,7 +8,6 @@ uv run pytest -s tests/api/test_rerun.py
 """
 
 import json
-import sys
 import time
 from unittest.mock import patch, MagicMock
 
@@ -142,7 +141,7 @@ def test_rerun_parameter_validation():
     logger.success("[TEST_SUCCESS] Rerun parameter validation works")
 
 
-@patch.dict(sys.modules, {"rerun": None})
+@patch("phosphobot.rerun_visualizer.rerun")
 def test_rerun_graceful_failure_when_sdk_missing(mock_rerun):
     """Test that RerunVisualizer handles missing rerun-sdk gracefully."""
     # Mock the import to raise ImportError
