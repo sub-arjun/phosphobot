@@ -700,11 +700,7 @@ export function BrowsePage() {
                                 rel="noopener noreferrer"
                                 className="inline-flex"
                               >
-                                <Button
-                                  variant={"outline"}
-                                  className="cursor-pointer"
-                                  size="sm"
-                                >
+                                <Button variant={"outline"} size="sm">
                                   <Eye className="mr-2 h-4 w-4" />
                                   Preview
                                 </Button>

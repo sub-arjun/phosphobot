@@ -195,7 +195,6 @@ export function AdminPage() {
             </div>
             <Button
               variant="outline"
-              className="cursor-pointer"
               onClick={(e) => {
                 e.preventDefault();
                 window.location.href = "/viz";

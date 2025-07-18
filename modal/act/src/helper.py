@@ -686,6 +686,8 @@ Please specify one of the following video keys when launching a training: {", ".
                 logger.error(f"Failed to read the first frame of video: {video_path}")
                 episodes_to_delete.append(episode_index)
                 continue
+            # Resize the frame to 224x224 (PaliGemma expects this size)
+            frame = cv2.resize(frame, (224, 224), interpolation=cv2.INTER_LINEAR)
             frames.append(frame[..., ::-1])  # Convert BGR to RGB
 
         # Call PaliGemma to compute the bounding box with the frames
