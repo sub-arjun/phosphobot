@@ -47,7 +47,7 @@ from phosphobot.models import (
     UDPServerInformationResponse,
     VoltageReadResponse,
     TemperatureReadResponse,
-    TemperatureWriteRequest
+    TemperatureWriteRequest,
 )
 from phosphobot.robot import (
     RemotePhosphobot,
@@ -547,6 +547,7 @@ async def read_voltage(
         current_voltage=voltage.tolist() if voltage is not None else None,
     )
 
+
 @router.post(
     "/temperature/read",
     response_model=TemperatureReadResponse,
@@ -557,7 +558,6 @@ async def read_temperature(
     robot_id: int = 0,
     rcm: RobotConnectionManager = Depends(get_rcm),
 ):
-    
     """
     Read temperature of the robot.
     """
@@ -567,12 +567,13 @@ async def read_temperature(
             status_code=400,
             detail="Robot does not support reading temperature",
         )
-    
+
     temperature = robot.current_temperature()
 
     return TemperatureReadResponse(
         current_max_Temperature=temperature,
     )
+
 
 @router.post(
     "/temperature/write",
@@ -594,13 +595,14 @@ async def write_temperature(
             status_code=400,
             detail="Robot does not support setting motor temperature",
         )
-
-    robot = cast(BaseManipulator, robot)
+    logger.debug(
+        f"Setting maximum temperature to {request.maximum_temperature} for robot {robot.name}"
+    )
     robot.set_maximum_temperature(
         maximum_temperature_target=request.maximum_temperature
     )
-
     return StatusResponse()
+
 
 @router.post(
     "/torque/read",
@@ -1080,9 +1082,9 @@ async def spawn_inference_server(
             )
             robots_to_control.remove(robot)
 
-    assert all(isinstance(robot, BaseManipulator) for robot in robots_to_control), (
-        "All robots must be manipulators for AI control"
-    )
+    assert all(
+        isinstance(robot, BaseManipulator) for robot in robots_to_control
+    ), "All robots must be manipulators for AI control"
 
     # Get the modal host and port here
     _, _, server_info = await setup_ai_control(
@@ -1159,9 +1161,9 @@ async def start_auto_control(
             )
             robots_to_control.remove(robot)
 
-    assert all(isinstance(robot, BaseManipulator) for robot in robots_to_control), (
-        "All robots must be manipulators for AI control"
-    )
+    assert all(
+        isinstance(robot, BaseManipulator) for robot in robots_to_control
+    ), "All robots must be manipulators for AI control"
 
     # Get the modal host and port here
     model, model_spawn_config, server_info = await setup_ai_control(

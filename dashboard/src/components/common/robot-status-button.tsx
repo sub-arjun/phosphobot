@@ -1,15 +1,7 @@
 import connectionImage from "@/assets/ConnectBot.jpg";
 import { RobotConfigModal } from "@/components/common/add-robot-connection";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,8 +13,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useGlobalStore } from "@/lib/hooks";
 import { fetchWithBaseUrl, fetcher } from "@/lib/utils";
 import type { RobotConfigStatus, ServerStatus, TorqueStatus } from "@/types";
@@ -36,8 +26,6 @@ import {
   LoaderCircle,
   Moon,
   PlusCircle,
-  Thermometer,
-  Settings,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -45,20 +33,22 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import useSWR from "swr";
 
+import {
+  EditTemperatureDialog,
+  TemperatureSubmenu,
+  getTemperatureInfo,
+} from "./temperature";
+
 function RobotStatusMenuItem({
   robotId,
   robotUsbPort,
   robot,
-  onTemperatureUpdate,
 }: {
   robotId: number;
   robotUsbPort: string;
   robot: RobotConfigStatus;
-  onTemperatureUpdate?: () => void;
 }) {
-  const [isTemperatureDialogOpen, setIsTemperatureDialogOpen] = useState(false);
-  const [temperatureValues, setTemperatureValues] = useState<string[]>([]);
-  const hasInitialized = useRef(false);
+  const [temperatureDialogOpen, setTemperatureDialogOpen] = useState(false);
 
   const { data: robotTorqueStatus, mutate: mutateTorque } =
     useSWR<TorqueStatus>([`/torque/read?robot_id=${robotId}`], ([url]) =>
@@ -84,52 +74,7 @@ function RobotStatusMenuItem({
     | undefined;
   const isTorqueEnabled = torqueStatus?.some((status) => status === 1);
 
-  // Initializes temperature values
-  useEffect(() => {
-    if (isTemperatureDialogOpen && robot.temperature && !hasInitialized.current) {
-      // Initialize with current max values instead of empty strings
-      const initialValues = robot.temperature.map(temp => 
-        temp.max !== null ? Math.round(temp.max).toString() : ""
-      );
-      setTemperatureValues(initialValues);
-      hasInitialized.current = true;
-    }
-    
-    // Reset initialization flag when dialog closes
-    if (!isTemperatureDialogOpen) {
-      hasInitialized.current = false;
-    }
-  }, [isTemperatureDialogOpen, robot.temperature]);
-
-  // Calculate temperature info
-  const getTemperatureInfo = () => {
-    if (!robot.temperature || robot.temperature.length === 0) return null;
-
-    const validTemps = robot.temperature.filter(
-      (temp) => temp.current !== null && temp.max !== null,
-    );
-
-    let maxTemp = null;
-    let hasOverheat = false;
-    let hasWarning = false;
-
-    if (validTemps.length > 0) {
-      maxTemp = Math.max(...validTemps.map((t) => t.current!));
-      hasOverheat = validTemps.some((t) => t.current! >= t.max! - 5);
-      hasWarning = validTemps.some(
-        (t) => t.current! >= t.max! - 15 && t.current! < t.max! - 5,
-      );
-    }
-
-    return {
-      maxTemp,
-      hasOverheat,
-      hasWarning,
-      hasAnyData: robot.temperature.length > 0,
-    };
-  };
-
-  const temperatureInfo = getTemperatureInfo();
+  const temperatureInfo = getTemperatureInfo(robot);
 
   // Sends a shutdown command to a specific robot and then refreshes its status.
   const moveToSleep = async () => {
@@ -174,55 +119,11 @@ function RobotStatusMenuItem({
     });
   };
 
-  const handleTemperatureUpdate = async () => {
-    try {
-      const numericValues = temperatureValues.map((val, index) => {
-        // If field is empty, use current max value as fallback
-        if (val === "" || val === null || val === undefined) {
-          return Math.round(robot.temperature?.[index]?.max || 0);
-        }
-        const num = parseInt(val);
-        return isNaN(num) ? Math.round(robot.temperature?.[index]?.max || 0) : num;
-      });
-      
-      await fetchWithBaseUrl(`/temperature/write?robot_id=${robotId}`, "POST", {
-        maximum_temperature: numericValues,
-      });
-      
-      // Refresh the server status to get updated temperature data
-      if (onTemperatureUpdate) {
-        onTemperatureUpdate();
-      }
-      
-      toast.success(`Temperature limits updated for Robot ${robot.name}`);
-      setIsTemperatureDialogOpen(false);
-    } catch (error) {
-      console.error("Failed to update temperature limits:", error);
-      toast.error("Failed to update temperature limits");
-    }
-  };
-
-  const handleTemperatureChange = (index: number, value: string) => {
-    // Remove any non-digit characters (including decimal points)
-    const integerValue = value.replace(/[^0-9]/g, '');
-    
-    // Limit the value to maximum 100
-    const numericValue = parseInt(integerValue) || 0;
-    const limitedValue = numericValue > 100 ? '100' : integerValue;
-    
-    const newValues = [...temperatureValues];
-    newValues[index] = limitedValue;
-    setTemperatureValues(newValues);
-  };
-
-  // Check if any temperature value is above 70
-  const hasHighTemperature = temperatureValues.some(val => {
-    const numericValue = parseInt(val) || 0;
-    return val !== "" && numericValue > 70;
-  });
-
   return (
-    <Dialog open={isTemperatureDialogOpen} onOpenChange={setIsTemperatureDialogOpen}>
+    <Dialog
+      open={temperatureDialogOpen}
+      onOpenChange={setTemperatureDialogOpen}
+    >
       <DropdownMenuSub>
         <DropdownMenuSubTrigger>
           <div className="p-2 text-sm flex justify-between items-center gap-x-2">
@@ -268,9 +169,10 @@ function RobotStatusMenuItem({
                   {temperatureInfo.hasOverheat && (
                     <AlertTriangle className="size-3 text-red-500" />
                   )}
-                  {temperatureInfo.hasWarning && !temperatureInfo.hasOverheat && (
-                    <AlertTriangle className="size-3 text-orange-500" />
-                  )}
+                  {temperatureInfo.hasWarning &&
+                    !temperatureInfo.hasOverheat && (
+                      <AlertTriangle className="size-3 text-orange-500" />
+                    )}
                 </div>
               )}
             </div>
@@ -329,155 +231,18 @@ function RobotStatusMenuItem({
             <Moon className="size-4" />
             <span>Move to sleep</span>
           </DropdownMenuItem>
-          {robot.temperature && robot.temperature.length > 0 && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <div className="flex items-center gap-2">
-                    <Thermometer
-                      className={`size-4 ${
-                        temperatureInfo?.hasOverheat
-                          ? "text-red-500"
-                          : temperatureInfo?.hasWarning
-                            ? "text-orange-500"
-                            : ""
-                      }`}
-                    />
-                    <span
-                      className={`${
-                        temperatureInfo?.hasOverheat
-                          ? "text-red-500"
-                          : temperatureInfo?.hasWarning
-                            ? "text-orange-500"
-                            : ""
-                      }`}
-                    >
-                      Motor temperatures
-                    </span>
-                    {temperatureInfo?.hasOverheat && (
-                      <AlertTriangle className="size-3 text-red-500 ml-auto" />
-                    )}
-                    {temperatureInfo?.hasWarning &&
-                      !temperatureInfo?.hasOverheat && (
-                        <AlertTriangle className="size-3 text-orange-500 ml-auto" />
-                      )}
-                  </div>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  {robot.temperature.map((temperature, index) => {
-                    const isOverheating =
-                      temperature.current !== null &&
-                      temperature.max !== null &&
-                      temperature.current >= temperature.max - 5;
-                    const isWarning =
-                      temperature.current !== null &&
-                      temperature.max !== null &&
-                      temperature.current >= temperature.max - 15 &&
-                      temperature.current < temperature.max - 5;
-
-                    return (
-                      <DropdownMenuItem
-                        key={index}
-                        className={`cursor-default hover:bg-transparent focus:bg-transparent ${
-                          isOverheating
-                            ? "bg-red-100 dark:bg-red-900/30"
-                            : isWarning
-                              ? "bg-orange-100 dark:bg-orange-900/30"
-                              : ""
-                        }`}
-                        onClick={(e) => e.preventDefault()}
-                      >
-                        <span className="text-sm">
-                          Motor {index + 1}:{" "}
-                          {temperature.current !== null
-                            ? `${temperature.current.toFixed(1)}°C`
-                            : "N/A"}
-                          {temperature.max !== null &&
-                            ` / ${temperature.max.toFixed(1)}°C`}
-                          {isOverheating && (
-                            <AlertTriangle className="inline size-3 ml-1 text-red-500" />
-                          )}
-                          {isWarning && !isOverheating && (
-                            <AlertTriangle className="inline size-3 ml-1 text-orange-500" />
-                          )}
-                        </span>
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              <DialogTrigger asChild>
-                <DropdownMenuItem 
-                  className="flex items-center gap-2"
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    setIsTemperatureDialogOpen(true);
-                  }}
-                >
-                  <Settings className="size-4" />
-                  <span>Set motor temperature limit</span>
-                </DropdownMenuItem>
-              </DialogTrigger>
-            </>
-          )}
+          <TemperatureSubmenu
+            robot={robot}
+            setTemperatureDialogOpen={setTemperatureDialogOpen}
+          />
         </DropdownMenuSubContent>
       </DropdownMenuSub>
-      
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Set the maximum temperature for each motor</DialogTitle>
-          <DialogDescription>
-            Configure the maximum temperature limits for each motor of Robot #{robotId}: {robot.name}. Note that float is not allowed for maximum temperature
-            and maximum value is capped at 100
-          </DialogDescription>
-        </DialogHeader>
-        
-        <div className="space-y-4">
-          {robot.temperature?.map((_, index) => {
-            const inputValue = temperatureValues[index] ?? "";
-            const numericValue = parseInt(inputValue) || 0;
-            const isAbove70 = inputValue !== "" && numericValue > 70;
-            
-            return (
-              <div key={index} className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Label htmlFor={`motor-${index}`} className="w-20">
-                    Motor {index + 1}:
-                  </Label>
-                  <Input
-                    id={`motor-${index}`}
-                    type="number"
-                    step="1"
-                    min="0"
-                    max="100"
-                    value={inputValue}
-                    onChange={(e) => handleTemperatureChange(index, e.target.value)}
-                    className={`flex-1 ${isAbove70 ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
-                  />
-                  <span className="text-sm text-muted-foreground">°C</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {hasHighTemperature && (
-          <div className="flex items-center gap-2 text-red-500 text-sm p-3 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800 animate-in slide-in-from-top-2 duration-300">
-            <AlertTriangle className="size-4 flex-shrink-0 animate-pulse" />
-            <span>We recommend temperature to be below 70°C. Temperatures above risk damaging servos.</span>
-          </div>
-        )}
-        
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setIsTemperatureDialogOpen(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleTemperatureUpdate}>
-            Update Temperature Limits
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+      <EditTemperatureDialog
+        robotId={robotId}
+        robot={robot}
+        temperatureDialogOpen={temperatureDialogOpen}
+        setTemperatureDialogOpen={setTemperatureDialogOpen}
+      />
     </Dialog>
   );
 }
@@ -539,7 +304,7 @@ function FullscreenImage() {
 export function RobotStatusDropdown() {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
 
-  const { data: serverStatus, mutate: mutateServerStatus } = useSWR<ServerStatus>(["/status"], ([url]) =>
+  const { data: serverStatus } = useSWR<ServerStatus>(["/status"], ([url]) =>
     fetcher(url),
   );
 
@@ -793,7 +558,6 @@ export function RobotStatusDropdown() {
                     robotId={index}
                     robotUsbPort={robot.device_name ?? "unknown"}
                     robot={robot}
-                    onTemperatureUpdate={mutateServerStatus}
                   />
                 );
               })}
