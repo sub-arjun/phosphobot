@@ -25,6 +25,9 @@ phosphobot_dir = (
 )
 gr00t_image = (
     modal.Image.from_dockerfile("Dockerfile")
+    .pip_install_from_pyproject(
+        pyproject_toml=str(phosphobot_dir / "pyproject.toml"),
+    )
     .pip_install(
         "sentry-sdk",
         "loguru",
@@ -50,9 +53,6 @@ gr00t_image = (
     )
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
     .env({"HF_HUB_DISABLE_TELEMETRY": "1"})
-    .pip_install_from_pyproject(
-        pyproject_toml=str(phosphobot_dir / "pyproject.toml"),
-    )
     .add_local_python_source("phosphobot")
 )
 

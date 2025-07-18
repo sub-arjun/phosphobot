@@ -12,7 +12,7 @@ dependencies = [
     "loguru>=0.7.2",
     "rich>=13.9.4",
     "matplotlib>=3.9.3",
-    "numpy",
+    "numpy>=1.26.4",
     "pybullet>=3.2.7",
     "pydantic>=2.10.2",
     "scipy>=1.14.1",
@@ -48,7 +48,6 @@ dependencies = [
     "netifaces-plus>=0.12.0",
     "wasmtime>=33.0.0",
     "async-property>=0.2.2",
-    "rerun-sdk>=0.23.0", 
 ]
 
 [dependency-groups]
@@ -67,6 +66,7 @@ dev = [
     "pytest-dependency>=0.6.0",
     "types-python-dateutil>=2.9.0.20250516",
 ]
+rerun = ["rerun-sdk>=0.23.0"]
 
 
 [tool.uv]
