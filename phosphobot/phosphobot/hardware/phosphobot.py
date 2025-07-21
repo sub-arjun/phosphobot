@@ -14,6 +14,7 @@ class RemotePhosphobot(BaseRobot):
     """
 
     name = "phosphobot"
+    _config: BaseRobotConfig | None = None
 
     def __init__(self, ip: str, port: int, robot_id: int, **kwargs):
         """
