@@ -191,8 +191,16 @@ class BaseRobotConfig(BaseModel):
     pid_gains: List[BaseRobotPIDGains] = Field(default_factory=list)
 
     # Torque value to consider that an object is gripped
-    gripping_threshold: int = 0
-    non_gripping_threshold: int = 0  # noise
+    gripping_threshold: int = Field(
+        default=80,
+        gt=0,
+        description="Torque threshold to consider an object gripped. This will block the gripper position and prevent it from moving further.",
+    )
+    non_gripping_threshold: int = Field(
+        default=10,
+        gt=0,
+        description="Torque threshold to consider an object not gripped. This will allow the gripper to move freely.",
+    )
 
     @classmethod
     def from_json(cls, filepath: str) -> Union["BaseRobotConfig", None]:
@@ -254,3 +262,16 @@ class BaseRobotConfig(BaseModel):
         logger.info(f"Saving configuration to {filepath}")
         self.to_json(filepath)
         return filepath
+
+
+class RobotConfigResponse(BaseModel):
+    """
+    Response model for robot configuration.
+    """
+
+    robot_id: int
+    name: str
+    config: BaseRobotConfig | None
+    gripper_joint_index: int | None = None
+    servo_ids: List[int] = Field(default_factory=lambda: list(range(1, 7)))
+    resolution: int = 4096

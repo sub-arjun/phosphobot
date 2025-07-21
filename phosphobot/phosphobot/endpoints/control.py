@@ -48,6 +48,7 @@ from phosphobot.models import (
     VoltageReadResponse,
     TemperatureReadResponse,
     TemperatureWriteRequest,
+    RobotConfigResponse,
 )
 from phosphobot.robot import (
     RemotePhosphobot,
@@ -369,7 +370,6 @@ async def move_relative(
                 detail=f"Robot {robot.name} .move_to_initial_position() did not set initial position or orientation: {initial_position=}, {initial_orientation_rad=}",
             )
 
-    logger.info(f"Received relative data: {data}")
     delta_position = np.array([data.x, data.y, data.z])
     delta_orientation_euler_degrees = np.array([data.rx, data.ry, data.rz])
     open = data.open if data.open is not None else None
@@ -397,10 +397,6 @@ async def move_relative(
     # Round to 3 decimals
     target_position = np.round(target_position, 3)
     target_orientation = np.round(target_orientation, 3)
-
-    logger.info(
-        f"Target position: {target_position}. Target orientation: {target_orientation}"
-    )
 
     await move_to_absolute_position(
         query=MoveAbsoluteRequest(
@@ -1315,3 +1311,30 @@ async def add_robot_connection(
         raise HTTPException(
             status_code=400, detail=f"Failed to add robot connection: {e}"
         )
+
+
+@router.post("/robot/config", response_model=RobotConfigResponse)
+async def get_robot_config(
+    robot_id: int = 0,
+    rcm: RobotConnectionManager = Depends(get_rcm),
+) -> RobotConfigResponse:
+    """
+    Get the configuration of the robot.
+    """
+    robot = await rcm.get_robot(robot_id)
+
+    if isinstance(robot, BaseManipulator) or isinstance(robot, RemotePhosphobot):
+        config = robot.config
+        return RobotConfigResponse(
+            robot_id=robot_id,
+            name=robot.name,
+            config=config,
+            gripper_joint_index=robot.GRIPPER_JOINT_INDEX,
+            servo_ids=robot.SERVO_IDS,
+            resolution=robot.RESOLUTION,
+        )
+
+    raise HTTPException(
+        status_code=400,
+        detail=f"Robot {robot.name} does not support configuration retrieval.",
+    )

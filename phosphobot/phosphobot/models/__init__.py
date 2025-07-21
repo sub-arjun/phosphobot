@@ -22,6 +22,7 @@ from .robot import (
     BaseRobotPIDGains,
     RobotConfigStatus,
     Temperature,
+    RobotConfigResponse,
 )
 
 
@@ -372,6 +373,7 @@ class TemperatureReadResponse(BaseModel):
         description=" A list of Temperature objects, one for each joint. If the robot is not connected, this will be None.",
     )
 
+
 class TemperatureWriteRequest(BaseModel):
     """
     Request to set the maximum Temperature for joints of the robot.
@@ -381,7 +383,7 @@ class TemperatureWriteRequest(BaseModel):
         ...,
         description="A list with the maximum temperature of each joint. The length of the list must be equal to the number of joints.",
     )
-    
+
 
 class InfoResponse(BaseModel):
     """
@@ -544,7 +546,7 @@ class RecordingStartRequest(BaseModel):
     )
     enable_rerun_visualization: bool = Field(
         False,
-        description="Enable rerun", 
+        description="Enable rerun",
     )
 
 
