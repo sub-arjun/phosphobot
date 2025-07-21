@@ -87,10 +87,8 @@ act_volume = modal.Volume.from_name("act", create_if_missing=True)
 paligemma_detect = modal.Function.from_name("paligemma-detector", "detect_object")
 
 
-def find_model_path(
-    model_id: str,
-) -> str | None:
-    model_path = Path(f"/data/{model_id}/")
+def find_model_path(model_id: str, checkpoint: int | None = None) -> str | None:
+    model_path = Path(f"/data/{model_id}")
     # Find the latest timestamp folder
     if model_path.exists():
         # Get the latest timestamp folder
@@ -105,6 +103,14 @@ def find_model_path(
         return None
     if latest_timestamp is None:
         return None
+    if checkpoint is not None:
+        # format the checkpoint to be 6 digits long
+        checkpoint_formated = f"{checkpoint:06d}"
+        model_path = (
+            model_path / "checkpoints" / checkpoint_formated / "pretrained_model"
+        )
+        if model_path.exists():
+            return str(model_path.resolve())
     model_path = (
         model_path / latest_timestamp / "checkpoints" / "last" / "pretrained_model"
     )
@@ -258,25 +264,34 @@ async def serve(
     server_port = 80
 
     with modal.forward(server_port, unencrypted=True) as tunnel:
-        model_path = find_model_path(model_id=model_id)
+        model_path = find_model_path(model_id=model_id, checkpoint=checkpoint)
 
         if model_path is None:
             logger.warning(
                 f"🤗 Model {model_id} not found in Modal volume. Will be downloaded from HuggingFace."
             )
             try:
-                current_timestamp = str(datetime.now(timezone.utc).timestamp())
-                model_path = snapshot_download(
-                    repo_id=model_id,
-                    repo_type="model",
-                    revision="main",
-                    local_dir=f"/data/{model_id}/{current_timestamp}/checkpoints/last/pretrained_model",
-                    allow_patterns=[
-                        f"checkpoint-{checkpoint}/*" if checkpoint is not None else "*"
-                    ],
-                    ignore_patterns=["checkpoint-*" if checkpoint is None else ""],
-                    token=os.getenv("HF_TOKEN"),
+                checkpoint_formated = (
+                    f"{checkpoint:06d}" if checkpoint is not None else "last"
                 )
+                current_timestamp = str(datetime.now(timezone.utc).timestamp())
+                if checkpoint:
+                    model_path = snapshot_download(
+                        repo_id=model_id,
+                        repo_type="model",
+                        revision="main",
+                        local_dir=f"/data/{model_id}/{current_timestamp}/checkpoints/{checkpoint_formated}/pretrained_model",
+                        allow_patterns=[f"checkpoint-{checkpoint}/*"],
+                        token=os.getenv("HF_TOKEN"),
+                    )
+                else:
+                    model_path = snapshot_download(
+                        repo_id=model_id,
+                        repo_type="model",
+                        revision="main",
+                        local_dir=f"/data/{model_id}/{current_timestamp}/checkpoints/last/pretrained_model",
+                        ignore_patterns=["checkpoint-*"],
+                    )
                 num_files = len(
                     [
                         f
