@@ -252,6 +252,7 @@ class StartServerRequest(BaseModel):
     timeout: Annotated[int, Field(default=15 * MINUTES, ge=0)]
     region: Optional[Literal["us-east", "us-west", "eu", "ap", "anywhere"]] = None
     model_specifics: Gr00tSpawnConfig | ACTSpawnConfig
+    checkpoint: Optional[int] = None
 
     @field_validator("timeout", mode="before")
     def clamp_timeout(cls, v: int) -> int:
@@ -606,6 +607,7 @@ def fastapi_app():
             # Spawn the serve function with the queue
             serve.spawn(
                 model_id=request.model_id,
+                checkpoint=request.checkpoint,
                 server_id=server_id,
                 timeout=request.timeout,
                 model_specifics=request.model_specifics,

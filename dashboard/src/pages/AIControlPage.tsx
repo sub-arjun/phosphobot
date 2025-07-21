@@ -30,6 +30,7 @@ import type { AIStatusResponse, ServerStatus, TrainingConfig } from "@/types";
 import {
   CameraIcon,
   CameraOff,
+  Cog,
   ExternalLink,
   HelpCircle,
   Pause,
@@ -51,7 +52,11 @@ export function AIControlPage() {
   const setModelId = useGlobalStore((state) => state.setModelId);
 
   const [showCassette, setShowCassette] = useState(false);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [speed, setSpeed] = useState(1.0);
+  const [selectedCheckpoint, setSelectedCheckpoint] = useState<number | null>(
+    null,
+  );
   const location = useLocation();
   const { session } = useAuth();
   const leaderArmSerialIds = useGlobalStore(
@@ -230,6 +235,7 @@ export function AIControlPage() {
         cameras_keys_mapping: cameraKeysMapping,
         model_type: selectedModelType,
         selected_camera_id: selectedCameraId,
+        checkpoint: selectedCheckpoint,
       });
 
       if (!response) {
@@ -339,7 +345,7 @@ export function AIControlPage() {
   return (
     <div className="container mx-auto py-8 max-w-4xl">
       <Card>
-        <CardContent className="space-y-6 pt-6">
+        <CardContent className="space-y-4 pt-6">
           <div className="flex flex-col gap-y-2">
             <div className="text-xs text-muted-foreground">
               Select model type
@@ -440,7 +446,7 @@ export function AIControlPage() {
                         }}
                       >
                         <TooltipTrigger asChild>
-                          <div className="cursor-pointer flex items-center gap-2 flex-row">
+                          <div className="flex items-center gap-2 flex-row">
                             {showCamera ? (
                               <CameraOff className="mr-1 h-4 w-4" />
                             ) : (
@@ -472,7 +478,84 @@ export function AIControlPage() {
                 </AccordionItem>
               </Accordion>
 
-              <div className="space-y-2">
+              <Accordion
+                type="single"
+                collapsible
+                value={showAdvancedOptions ? "advanced-options" : ""}
+              >
+                <AccordionItem value="advanced-options">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <AccordionTrigger
+                        onClick={() => {
+                          setShowAdvancedOptions(!showAdvancedOptions);
+                        }}
+                      >
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-2 flex-row">
+                            <Cog className="mr-1 h-4 w-4" />
+                            {showAdvancedOptions
+                              ? "Hide advanced options"
+                              : "Show advanced options"}
+                          </div>
+                        </TooltipTrigger>
+                      </AccordionTrigger>
+                      <TooltipContent>
+                        <p className="max-w-xs">
+                          Configure advanced model settings.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <AccordionContent>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="checkpoint">
+                          Checkpoint to load (leave empty to use latest)
+                        </Label>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="max-w-xs">
+                                Specify a checkpoint to load. Leave empty to use
+                                the latest checkpoint.
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                      <Input
+                        id="checkpoint"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={
+                          selectedCheckpoint !== null ? selectedCheckpoint : ""
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "") {
+                            setSelectedCheckpoint(null);
+                          } else {
+                            const numVal = parseInt(val, 10);
+                            if (!isNaN(numVal) && numVal >= 0) {
+                              setSelectedCheckpoint(numVal);
+                            }
+                          }
+                        }}
+                        placeholder="e.g. 500 (optional)"
+                        className="w-full"
+                        disabled={aiStatus?.status !== "stopped"}
+                      />
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+
+              <div className="space-y-2 mt-2">
                 {selectedModelType == "gr00t" && <Label>Prompt</Label>}
                 {selectedModelType === "ACT_BBOX" && (
                   <Label>Object to detect</Label>

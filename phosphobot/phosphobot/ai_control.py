@@ -111,6 +111,7 @@ async def setup_ai_control(
     cameras_keys_mapping: dict[str, int] | None = None,
     init_connected_robots: bool = True,
     verify_cameras: bool = True,
+    checkpoint: int | None = None,
 ) -> tuple[Gr00tN1 | ACT, Gr00tSpawnConfig | ACTSpawnConfig, ServerInfoResponse]:
     """
     Setup the AI control loop by spawning the inference server and returning the model.
@@ -175,6 +176,7 @@ async def setup_ai_control(
             url=f"{tokens.MODAL_API_URL}/spawn",
             json={
                 "model_id": model_id,
+                "checkpoint": checkpoint,
                 "model_type": model_type,
                 "timeout": 15 * 60,
                 "model_specifics": clean,

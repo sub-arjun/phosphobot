@@ -215,6 +215,7 @@ async def serve(
     model_id: str,
     server_id: int,
     model_specifics: ACTSpawnConfig,
+    checkpoint: int | None = None,
     timeout: int = FUNCTION_TIMEOUT_INFERENCE,
     q=None,
 ):
@@ -270,9 +271,30 @@ async def serve(
                     repo_type="model",
                     revision="main",
                     local_dir=f"/data/{model_id}/{current_timestamp}/checkpoints/last/pretrained_model",
+                    allow_patterns=[
+                        f"checkpoint-{checkpoint}/*" if checkpoint is not None else "*"
+                    ],
+                    ignore_patterns=["checkpoint-*" if checkpoint is None else ""],
                     token=os.getenv("HF_TOKEN"),
                 )
-                logger.success(f"Model {model_id} downloaded to {model_path}")
+                num_files = len(
+                    [
+                        f
+                        for f in Path(model_path).rglob("*")
+                        if f.is_file() and not f.name.startswith(".")
+                    ]
+                )
+                if num_files == 0:
+                    logger.info(f"No files found in the downloaded model {model_id}")
+                    if checkpoint is not None:
+                        logger.info("Fetching latest model instead...")
+                        model_path = snapshot_download(
+                            repo_id=model_id,
+                            repo_type="model",
+                            revision="main",
+                            local_dir=f"/data/models/{model_id}/{current_timestamp}/checkpoints/last/pretrained_model",
+                            ignore_patterns=["checkpoint-*"],
+                        )
             except Exception as e:
                 logger.error(f"Failed to download model {model_id}: {e}")
                 raise e
@@ -770,7 +792,6 @@ def train(  # All these args should be verified in phosphobot
                     compute_stats(
                         dataset_path,
                         num_workers=int(FUNCTION_CPU_TRAINING),
-                        batch_size=1024,
                     )
                 )
                 STATS_FILE = dataset_path / "meta" / "stats.json"
@@ -837,11 +858,17 @@ def train(  # All these args should be verified in phosphobot
         # Upload other checkpoints as well
         for item in output_dir.glob("checkpoints/*/pretrained_model/*"):
             if item.is_file():
-                logger.debug(f"Uploading {item}")
+                # Will upload all checkpoints under the name checkpoint-{number}/
+                rel_path = item.relative_to(output_dir)
+                number = rel_path.parts[1]
+                if number == "last":
+                    continue
+                checkpoint_number = int(rel_path.parts[1])
+
                 api.upload_file(
                     repo_type="model",
                     path_or_fileobj=str(item.resolve()),
-                    path_in_repo=item.name,
+                    path_in_repo=f"checkpoint-{checkpoint_number}/{item.name}",
                     repo_id=model_name,
                     token=hf_token,
                 )
