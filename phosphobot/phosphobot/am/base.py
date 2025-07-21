@@ -166,7 +166,7 @@ class TrainingParamsGr00T(BaseModel):
         default=10,
         description="Number of epochs to train for, default is 10",
         gt=0,
-        le=50,
+        le=100,
     )
     learning_rate: float = Field(
         default=0.0001,
