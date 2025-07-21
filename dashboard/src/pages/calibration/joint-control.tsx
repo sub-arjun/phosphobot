@@ -1,5 +1,3 @@
-"use client";
-
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Card,
@@ -12,11 +10,20 @@ import { ChartContainer } from "@/components/ui/chart";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { fetchWithBaseUrl } from "@/lib/utils";
+import { fetchWithBaseUrl, fetcher } from "@/lib/utils";
+import type { ServerStatus } from "@/types";
 import { Activity, Settings, Sliders } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Line, LineChart, ResponsiveContainer, YAxis } from "recharts";
+import useSWR from "swr";
 
 type PositionDataPoint = { time: number; value: number; goal: number };
 type TorqueDataPoint = { time: number; value: number };
@@ -24,7 +31,7 @@ type TorqueDataPoint = { time: number; value: number };
 // Physical limits for joints (motor units)
 const POSITION_LIMIT = 4095;
 // Example torque limits (adjust as needed)
-const TORQUE_LIMIT = 500; // replace with actual joint torque limit
+const TORQUE_LIMIT = 200; // replace with actual joint torque limit
 
 export function JointControl() {
   const NUM_JOINTS = 6;
@@ -64,38 +71,52 @@ export function JointControl() {
   const [jointTorques, setJointTorques] = useState<number[]>(
     Array(NUM_JOINTS).fill(0),
   );
-  const [isConnected, setIsConnected] = useState<boolean>(false);
+
+  const { data: serverStatus } = useSWR<ServerStatus>(["/status"], fetcher, {
+    refreshInterval: 5000,
+  });
+
+  const [selectedRobotName, setSelectedRobotName] = useState<string | null>(
+    null,
+  );
 
   const intervalRef = useRef<number | null>(null);
 
-  // Check connection status
-  const checkConnection = async () => {
-    try {
-      const status = await fetchWithBaseUrl("/status", "GET");
-      setIsConnected(
-        Array.isArray(status.robot_status) && status.robot_status.length > 0,
-      );
-    } catch {
-      setIsConnected(false);
+  const robotIDFromName = (name?: string | null) => {
+    if (name === undefined || name === null || !serverStatus?.robot_status) {
+      return 0; // Default to the first robot
     }
+    const index = serverStatus.robot_status.findIndex(
+      (robot) => robot.device_name === name,
+    );
+    return index === -1 ? 0 : index; // Return 0 if not found or first one
   };
 
   const fetchJointPositions = async (): Promise<number[]> => {
-    const data = await fetchWithBaseUrl(`/joints/read`, "POST", {
-      unit: "motor_units",
-      joints_ids: null,
-    });
+    const robotId = robotIDFromName(selectedRobotName);
+    const data = await fetchWithBaseUrl(
+      `/joints/read?robot_id=${robotId}`,
+      "POST",
+      {
+        unit: "motor_units",
+        joints_ids: null,
+      },
+    );
     return Array.isArray(data.angles) ? data.angles : jointPositions;
   };
 
   const fetchJointTorques = async (): Promise<number[]> => {
-    const data = await fetchWithBaseUrl(`/torque/read`, "POST");
+    const robotId = robotIDFromName(selectedRobotName);
+    const data = await fetchWithBaseUrl(
+      `/torque/read?robot_id=${robotId}`,
+      "POST",
+    );
     return Array.isArray(data) ? data : jointTorques;
   };
 
   const sendJointCommands = async () => {
-    if (!isConnected) return;
-    await fetchWithBaseUrl(`/joints/write`, "POST", {
+    const robotId = robotIDFromName(selectedRobotName);
+    await fetchWithBaseUrl(`/joints/write?robot_id=${robotId}`, "POST", {
       angles: goalAngles,
       unit: "motor_units",
     });
@@ -119,10 +140,22 @@ export function JointControl() {
         ),
       );
 
+      // Reset torque buffers
+      setTorqueBuffers(
+        Array(NUM_JOINTS)
+          .fill(null)
+          .map(() =>
+            Array.from({ length: NUM_POINTS }, (_, i) => ({
+              time: i,
+              value: 0,
+            })),
+          ),
+      );
+
       setIsInitialized(true);
+      setError(""); // Clear any previous errors
     } catch (err) {
-      console.error("Failed to initialize joint positions:", err);
-      setError("Failed to initialize joint positions");
+      setError(`Failed to initialize joint positions: ${err}`);
     }
   };
 
@@ -142,22 +175,45 @@ export function JointControl() {
   };
 
   useEffect(() => {
+    if (!serverStatus || !serverStatus.robot_status) return;
     const initialize = async () => {
-      await checkConnection();
       if (!isInitialized) {
         await initializeJoints();
       }
     };
-
     initialize();
-  }, [isInitialized, initializeJoints]);
+  }, [isInitialized, serverStatus]);
+
+  useEffect(() => {
+    if (
+      !selectedRobotName &&
+      serverStatus?.robot_status &&
+      serverStatus.robot_status.length > 0 &&
+      serverStatus.robot_status[0].device_name
+    ) {
+      setSelectedRobotName(serverStatus.robot_status[0].device_name);
+    }
+  }, [serverStatus, selectedRobotName]);
+
+  // Handle robot switching - reinitialize when robot changes
+  useEffect(() => {
+    if (selectedRobotName && isInitialized) {
+      // Reset initialization state to force reload
+      setIsInitialized(false);
+      setError("");
+
+      // Reinitialize with new robot
+      const reinitialize = async () => {
+        await initializeJoints();
+      };
+      reinitialize();
+    }
+  }, [selectedRobotName]);
 
   useEffect(() => {
     if (!isInitialized) return;
 
     const updateData = async () => {
-      if (!isConnected) return;
-
       try {
         const [positions, torques] = await Promise.all([
           fetchJointPositions(),
@@ -196,18 +252,17 @@ export function JointControl() {
 
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = window.setInterval(async () => {
-      await checkConnection();
       await updateData();
     }, updateInterval * 1000);
+
     (async () => {
-      await checkConnection();
       await updateData();
     })();
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [updateInterval, goalAngles, isConnected, isInitialized]);
+  }, [updateInterval, goalAngles, isInitialized, selectedRobotName]);
 
   return (
     <div className="container mx-auto p-4 max-w-7xl">
@@ -229,6 +284,31 @@ export function JointControl() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              <div className="mb-6">
+                <Label htmlFor="robot-select" className="text-sm font-medium">
+                  Select Robot
+                </Label>
+                <Select
+                  value={selectedRobotName || ""}
+                  onValueChange={(value) => setSelectedRobotName(value)}
+                >
+                  <SelectTrigger id="robot-select" className="mt-2">
+                    <SelectValue placeholder="Select robot to control" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {serverStatus &&
+                      serverStatus.robot_status.map((robot) => (
+                        <SelectItem
+                          key={robot.device_name}
+                          value={robot.device_name || "Undefined port"}
+                        >
+                          {robot.name} ({robot.device_name})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {goalAngles.map((angle, i) => (
                 <div key={i} className="space-y-3">
                   <div className="flex justify-between items-center">
@@ -237,15 +317,15 @@ export function JointControl() {
                   </div>
                   <Slider
                     id={`joint-${i}`}
-                    min={-4095}
+                    min={0}
                     max={POSITION_LIMIT}
                     step={1}
                     value={[angle]}
                     onValueChange={(vals) => updateJointGoalAngle(i, vals[0])}
                   />
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>-4095</span>
                     <span>0</span>
+                    <span>2048</span>
                     <span>4095</span>
                   </div>
                 </div>
@@ -285,6 +365,7 @@ export function JointControl() {
                     </div>
                   </RadioGroup>
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="update-interval">
                     Update Interval (seconds)
@@ -343,7 +424,7 @@ export function JointControl() {
                           <YAxis
                             domain={
                               plotOption === "Position"
-                                ? [-POSITION_LIMIT, POSITION_LIMIT]
+                                ? [0, POSITION_LIMIT]
                                 : [-TORQUE_LIMIT, TORQUE_LIMIT]
                             }
                             tickFormatter={(value) =>
