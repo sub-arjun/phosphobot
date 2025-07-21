@@ -1304,14 +1304,17 @@ class Gr00tTrainer(BaseTrainer):
             # Also upload checkpoint directories if they exist, named as "checkpoint-<number>"
             for item in files_directory.glob("checkpoint-*"):
                 if item.is_dir():
-                    rel_path = item.relative_to(files_directory)
-                    logger.info(f"Uploading checkpoint directory: {item} as {rel_path}")
-                    api.upload_file(
-                        repo_type="model",
-                        path_or_fileobj=str(item.resolve()),
-                        path_in_repo=str(rel_path),
-                        repo_id=self.config.model_name,
-                    )
+                    # Upload the entire directory structure
+                    for sub_item in item.glob("**/*"):
+                        if sub_item.is_file():
+                            sub_rel_path = sub_item.relative_to(files_directory)
+                            logger.info(f"Uploading file: {sub_item} as {sub_rel_path}")
+                            api.upload_file(
+                                repo_type="model",
+                                path_or_fileobj=str(sub_item.resolve()),
+                                path_in_repo=str(sub_rel_path),
+                                repo_id=self.config.model_name,
+                            )
 
             # Upload README last
             readme = generate_readme(
