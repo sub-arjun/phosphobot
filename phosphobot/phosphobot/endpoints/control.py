@@ -1330,6 +1330,8 @@ async def get_robot_config(
             name=robot.name,
             config=config,
             gripper_joint_index=robot.GRIPPER_JOINT_INDEX,
+            servo_ids=robot.SERVO_IDS,
+            resolution=robot.RESOLUTION,
         )
 
     raise HTTPException(

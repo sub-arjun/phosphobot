@@ -273,3 +273,5 @@ class RobotConfigResponse(BaseModel):
     name: str
     config: BaseRobotConfig | None
     gripper_joint_index: int | None = None
+    servo_ids: List[int] = Field(default_factory=lambda: list(range(1, 7)))
+    resolution: int = 4096

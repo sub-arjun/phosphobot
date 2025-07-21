@@ -463,6 +463,8 @@ class RemotePhosphobot(BaseRobot):
             return None
         self._config = BaseRobotConfig.model_validate(config_response["config"])
         self.GRIPPER_JOINT_INDEX = config_response.get("gripper_joint_index", -1)
+        self.SERVO_IDS = config_response.get("servo_ids", list(range(1, 7)))
+        self.RESOLUTION = config_response.get("resolution", 4096)
         return self._config
 
     def _rad_to_open_command(self, radians: float) -> float:
@@ -482,3 +484,26 @@ class RemotePhosphobot(BaseRobot):
             - close_position
         ) / (open_position - close_position)
         return np.clip(open_command, 0, 1)
+
+    def _radians_to_motor_units(self, radians: float, servo_id: int) -> int:
+        """
+        Convert a single q position from radians to motor discrete units (0 -> RESOLUTION)
+
+        Note: The result can exceed the resolution of the motor, in the case of a continuous rotation motor.
+        """
+        offset_id = self.SERVO_IDS.index(servo_id)
+        if self.config is None:
+            raise ValueError(
+                "Robot configuration is not set. Run the calibration first."
+            )
+
+        x = (
+            int(
+                radians
+                * self.config.servos_offsets_signs[offset_id]
+                * ((self.RESOLUTION - 1) / (2 * np.pi))
+            )
+            + self.config.servos_offsets[offset_id]
+        )
+
+        return int(x)
