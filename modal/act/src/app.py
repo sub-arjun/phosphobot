@@ -7,6 +7,7 @@ from typing import Any
 
 import cv2
 import wandb
+import shutil
 import numpy as np
 from fastapi import Response
 from huggingface_hub import HfApi, snapshot_download
@@ -284,6 +285,17 @@ async def serve(
                         allow_patterns=[f"checkpoint-{checkpoint}/*"],
                         token=os.getenv("HF_TOKEN"),
                     )
+                    # Copy files one dir up
+                    src_dir = Path(model_path)
+                    dst_dir = src_dir.parent
+
+                    for item in src_dir.iterdir():
+                        target = dst_dir / item.name
+                        if item.is_file():
+                            shutil.copy2(item, target)
+
+                    # Remove the original checkpoint directory
+                    shutil.rmtree(src_dir)
                 else:
                     model_path = snapshot_download(
                         repo_id=model_id,
