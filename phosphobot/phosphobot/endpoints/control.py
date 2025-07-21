@@ -48,6 +48,7 @@ from phosphobot.models import (
     VoltageReadResponse,
     TemperatureReadResponse,
     TemperatureWriteRequest,
+    RobotConfigResponse,
 )
 from phosphobot.robot import (
     RemotePhosphobot,
@@ -1310,3 +1311,28 @@ async def add_robot_connection(
         raise HTTPException(
             status_code=400, detail=f"Failed to add robot connection: {e}"
         )
+
+
+@router.post("/robot/config", response_model=RobotConfigResponse)
+async def get_robot_config(
+    robot_id: int = 0,
+    rcm: RobotConnectionManager = Depends(get_rcm),
+) -> RobotConfigResponse:
+    """
+    Get the configuration of the robot.
+    """
+    robot = await rcm.get_robot(robot_id)
+
+    if isinstance(robot, BaseManipulator) or isinstance(robot, RemotePhosphobot):
+        config = robot.config
+        return RobotConfigResponse(
+            robot_id=robot_id,
+            name=robot.name,
+            config=config,
+            gripper_joint_index=robot.GRIPPER_JOINT_INDEX,
+        )
+
+    raise HTTPException(
+        status_code=400,
+        detail=f"Robot {robot.name} does not support configuration retrieval.",
+    )

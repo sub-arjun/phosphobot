@@ -262,3 +262,14 @@ class BaseRobotConfig(BaseModel):
         logger.info(f"Saving configuration to {filepath}")
         self.to_json(filepath)
         return filepath
+
+
+class RobotConfigResponse(BaseModel):
+    """
+    Response model for robot configuration.
+    """
+
+    robot_id: int
+    name: str
+    config: BaseRobotConfig | None
+    gripper_joint_index: int | None = None
