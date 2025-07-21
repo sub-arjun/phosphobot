@@ -130,7 +130,7 @@ class Predictor:
                     // validated_info_model.total_episodes
                 )
                 # This is a heuristic to determine the batch size, it is set for an A100 GPU
-                batch_size = 110 // number_of_cameras - 3 * number_of_cameras
+                batch_size = max(110 // number_of_cameras - 3 * number_of_cameras, 1)
                 logger.info(
                     f"Batch size not provided. Using default batch size of {batch_size}."
                 )
