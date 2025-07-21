@@ -1033,6 +1033,7 @@ class BaseManipulator(BaseRobot):
         if not self.is_object_gripped:
             open_command_clipped = np.clip(open_command, 0, 1)
         else:
+            # open_command 0 is closed. We won't close further if the object is already gripped, i.e. we will not send a command < closing_gripper_value
             open_command_clipped = np.clip(open_command, self.closing_gripper_value, 1)
 
         # Only tighten if object is not gripped:
