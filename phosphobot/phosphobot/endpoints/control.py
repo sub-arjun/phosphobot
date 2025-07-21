@@ -369,7 +369,6 @@ async def move_relative(
                 detail=f"Robot {robot.name} .move_to_initial_position() did not set initial position or orientation: {initial_position=}, {initial_orientation_rad=}",
             )
 
-    logger.info(f"Received relative data: {data}")
     delta_position = np.array([data.x, data.y, data.z])
     delta_orientation_euler_degrees = np.array([data.rx, data.ry, data.rz])
     open = data.open if data.open is not None else None
@@ -397,10 +396,6 @@ async def move_relative(
     # Round to 3 decimals
     target_position = np.round(target_position, 3)
     target_orientation = np.round(target_orientation, 3)
-
-    logger.info(
-        f"Target position: {target_position}. Target orientation: {target_orientation}"
-    )
 
     await move_to_absolute_position(
         query=MoveAbsoluteRequest(

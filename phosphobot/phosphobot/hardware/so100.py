@@ -242,8 +242,9 @@ class SO100Hardware(BaseManipulator):
 
         values = q_target.tolist()
         motor_names = list(self.motors.keys())
+
+        # Gripper is the last parameter of q_target (last motor)
         if not enable_gripper:
-            # Gripper is the last parameter of q_target (last motor)
             values = values[:-1]
             motor_names = motor_names[:-1]
 
@@ -351,9 +352,9 @@ class SO100Hardware(BaseManipulator):
             logger.warning(f"Error reading motor temperature for servo {servo_id}: {e}")
             self.update_motor_errors()
             return None
-    
-    def write__group_motor_maximum_temperature(
-        self, maximum_temperature_target: List[int],  **kwargs
+
+    def write_group_motor_maximum_temperature(
+        self, maximum_temperature_target: List[int], **kwargs
     ) -> None:
         """
         Write the maximum temperature of all motors of a robot.

@@ -127,19 +127,25 @@ class BaseManipulator(BaseRobot):
         """
         raise NotImplementedError("The robot enable torque must be implemented.")
 
-    def read_motor_temperature(self, servo_id: int) -> tuple[float,float] | None:
+    def read_motor_temperature(self, servo_id: int) -> tuple[float, float] | None:
         """
         Read the temperature of a motor
         raise: Exception if the routine has not been implemented
         """
-        raise NotImplementedError("The robot read motor temperature must be implemented.")
-    
-    def write__group_motor_maximum_temperature(self, maximum_temperature_target: List[int]) -> None:
+        raise NotImplementedError(
+            "The robot read motor temperature must be implemented."
+        )
+
+    def write_group_motor_maximum_temperature(
+        self, maximum_temperature_target: List[int]
+    ) -> None:
         """
         Write the maximum temperature of all motors of a robot.
         raise: Exception if the routine has not been implemented
         """
-        raise NotImplementedError("The robot write group motor temperature must be implemented.")
+        raise NotImplementedError(
+            "The robot write group motor temperature must be implemented."
+        )
 
     @abstractmethod
     def write_motor_position(self, servo_id: int, units: int, **kwargs) -> None:
@@ -207,9 +213,9 @@ class BaseManipulator(BaseRobot):
 
         # When creating a new robot, you should add default values for these
         # These values depends on the hardware
-        assert self.CALIBRATION_POSITION is not None, (
-            "CALIBRATION_POSITION must be defined in the class"
-        )
+        assert (
+            self.CALIBRATION_POSITION is not None
+        ), "CALIBRATION_POSITION must be defined in the class"
         assert self.RESOLUTION is not None, "RESOLUTION must be defined in the class"
         assert self.SERVO_IDS is not None, "SERVO_IDS must be defined in the class"
 
@@ -1022,6 +1028,7 @@ class BaseManipulator(BaseRobot):
         # )
         # Clamp the command between 0 and 1
         self.update_object_gripping_status()
+
         if not self.is_object_gripped:
             open_command_clipped = np.clip(open_command, 0, 1)
         else:
@@ -1157,7 +1164,7 @@ class BaseManipulator(BaseRobot):
 
         # If the robot is not connected, error raised
         return None
-    
+
     def current_temperature(self) -> List[Temperature] | None:
         """
         Read the current and maximum temperature of the joints of the robot.
@@ -1174,23 +1181,23 @@ class BaseManipulator(BaseRobot):
                     temperature = Temperature(current=temps[0], max=temps[1])
                     temperatures.append(temperature)
                 else:
-                    temperature = Temperature(current=None, max=None)  
+                    temperature = Temperature(current=None, max=None)
                     temperatures.append(temperature)
             return temperatures
-        
+
         # If the robot is not connected, return None
         return None
-    
+
     def set_maximum_temperature(self, maximum_temperature_target: List[int]) -> None:
         """
         Set the maximum temperature of all motors of a robot.
         """
 
         if self.is_connected:
-            self.write__group_motor_maximum_temperature(maximum_temperature_target = maximum_temperature_target)
-        
+            self.write_group_motor_maximum_temperature(
+                maximum_temperature_target=maximum_temperature_target
+            )
 
-    
     def is_powered_on(self) -> bool:
         """
         Return True if all voltage readings are above 0.1V and successful
@@ -1252,10 +1259,34 @@ class BaseManipulator(BaseRobot):
             logger.warning("Robot configuration is not set. Run the calibration first.")
             return
 
+        logger.warning(
+            f"Reading gripper torque: {gripper_torque}. Thresholds: {self.config.gripping_threshold}, {self.config.non_gripping_threshold}"
+        )
         if gripper_torque >= self.config.gripping_threshold:
             self.is_object_gripped = True
         if gripper_torque <= self.config.non_gripping_threshold:
             self.is_object_gripped = False
+
+    def _rad_to_open_command(self, radians: float) -> float:
+        """
+        Convert radians to open command for the gripper.
+        """
+        if self.config is None:
+            raise ValueError(
+                "Robot configuration is not set. Run the calibration first."
+            )
+        open_position = self.config.servos_calibration_position[-1]
+        close_position = self.config.servos_offsets[-1]
+        open_command = (
+            self._radians_to_motor_units(
+                radians=radians, servo_id=self.GRIPPER_JOINT_INDEX
+            )
+            - close_position
+        ) / (open_position - close_position)
+        logger.debug(
+            f"Converting rad {radians} to open command {open_command}. Open position: {open_position}, Close position: {close_position}"
+        )
+        return np.clip(open_command, 0, 1)
 
 
 class BaseMobileRobot(BaseRobot):
