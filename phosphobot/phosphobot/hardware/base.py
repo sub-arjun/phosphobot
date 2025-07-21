@@ -339,6 +339,7 @@ class BaseManipulator(BaseRobot):
         try:
             with open(json_filename, "r") as f:
                 data = json.load(f)
+            logger.debug(f"Loaded default config from {json_filename}")
             return BaseRobotConfig(**data)
         except FileNotFoundError:
             if raise_if_none:
@@ -1003,7 +1004,7 @@ class BaseManipulator(BaseRobot):
             if config is not None:
                 self.config = config
                 logger.success(
-                    f"Loaded default config for {self.name}, voltage {voltage}."
+                    f"Loaded default config for {self.name}, voltage {voltage}.\n{self.config.model_dump_json(indent=2)}"
                 )
                 return
 
@@ -1283,9 +1284,6 @@ class BaseManipulator(BaseRobot):
             )
             - close_position
         ) / (open_position - close_position)
-        logger.debug(
-            f"Converting rad {radians} to open command {open_command}. Open position: {open_position}, Close position: {close_position}"
-        )
         return np.clip(open_command, 0, 1)
 
 

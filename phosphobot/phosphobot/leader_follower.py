@@ -189,7 +189,15 @@ async def leader_follower_loop(
                 leader.write_joint_positions(theta_des_rad, unit="rad")
                 if invert_controls:
                     theta_des_rad[0] = -theta_des_rad[0]
-                follower.write_joint_positions(theta_des_rad, unit="rad")
+                follower.set_motors_positions(
+                    q_target_rad=theta_des_rad, enable_gripper=False
+                )
+                # Get the leader gripper position and set it to the follower
+                follower.control_gripper(
+                    open_command=leader._rad_to_open_command(
+                        theta_des_rad[leader.GRIPPER_JOINT_INDEX]
+                    )
+                )
 
         # Maintain loop frequency
         elapsed = time.perf_counter() - start_time
