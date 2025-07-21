@@ -153,7 +153,7 @@ async def run_act_training(
         "--policy.type=act",
         f"--batch_size={training_params.batch_size}",
         "--wandb.project=phospho-ACT",
-        "--save_freq=2000",  # Save a checkpoint every 2000 steps
+        f"--save_freq={training_params.save_steps}",
         f"--steps={training_params.steps}",
         "--policy.device=cuda",
         f"--output_dir={output_dir}",
@@ -323,19 +323,19 @@ async def serve(
                 nonlocal last_bbox_computed
                 nonlocal policy
 
-                assert (
-                    len(current_qpos) == model_specifics.state_size[0]
-                ), f"State size mismatch: {len(current_qpos)} != {model_specifics.state_size[0]}"
-                assert (
-                    len(images) <= len(model_specifics.video_keys)
-                ), f"Number of images {len(images)} is more than the number of video keys {len(model_specifics.video_keys)}"
+                assert len(current_qpos) == model_specifics.state_size[0], (
+                    f"State size mismatch: {len(current_qpos)} != {model_specifics.state_size[0]}"
+                )
+                assert len(images) <= len(model_specifics.video_keys), (
+                    f"Number of images {len(images)} is more than the number of video keys {len(model_specifics.video_keys)}"
+                )
                 if len(images) > 0:
-                    assert (
-                        len(images[0].shape) == 3
-                    ), f"Image shape is not correct, {images[0].shape} expected (H, W, C)"
-                    assert (
-                        len(images[0].shape) == 3 and images[0].shape[2] == 3
-                    ), f"Image shape is not correct {images[0].shape} expected (H, W, 3)"
+                    assert len(images[0].shape) == 3, (
+                        f"Image shape is not correct, {images[0].shape} expected (H, W, C)"
+                    )
+                    assert len(images[0].shape) == 3 and images[0].shape[2] == 3, (
+                        f"Image shape is not correct {images[0].shape} expected (H, W, 3)"
+                    )
 
                 with torch.no_grad(), torch.autocast(device_type="cuda"):
                     current_qpos = current_qpos.copy()
@@ -606,8 +606,8 @@ async def serve(
 @app.function(
     image=FUNCTION_IMAGE,
     gpu=FUNCTION_GPU_TRAINING,
-    # 10 minutes added for the rest of the code to execute
-    timeout=FUNCTION_TIMEOUT_TRAINING + 10 * MINUTES,
+    # 15 minutes added for the rest of the code to execute
+    timeout=FUNCTION_TIMEOUT_TRAINING + 15 * MINUTES,
     secrets=[
         modal.Secret.from_dict({"MODAL_LOGLEVEL": "DEBUG"}),
         modal.Secret.from_name("supabase"),
@@ -823,6 +823,19 @@ def train(  # All these args should be verified in phosphobot
         files_directory = output_dir / "checkpoints" / "last" / "pretrained_model"
         output_paths: list[Path] = []
         for item in files_directory.glob("**/*"):
+            if item.is_file():
+                logger.debug(f"Uploading {item}")
+                api.upload_file(
+                    repo_type="model",
+                    path_or_fileobj=str(item.resolve()),
+                    path_in_repo=item.name,
+                    repo_id=model_name,
+                    token=hf_token,
+                )
+                output_paths.append(item)
+
+        # Upload other checkpoints as well
+        for item in output_dir.glob("checkpoints/*/pretrained_model/*"):
             if item.is_file():
                 logger.debug(f"Uploading {item}")
                 api.upload_file(

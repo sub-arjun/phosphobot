@@ -1001,6 +1001,7 @@ async def run_gr00t_training(
     number_of_robots,
     number_of_cameras,
     learning_rate,
+    save_steps: int,
     wandb_enabled: bool,
     validation_data_dir=None,
     timeout_seconds: int | None = None,
@@ -1033,7 +1034,7 @@ async def run_gr00t_training(
             "--num-epochs",
             str(epochs),
             "--save-steps",
-            "10000",
+            str(save_steps),
             "--num-arms",
             str(number_of_robots),
             "--num-cams",
@@ -1249,6 +1250,7 @@ class Gr00tTrainer(BaseTrainer):
                 number_of_robots=number_of_robots,
                 number_of_cameras=number_of_cameras,
                 learning_rate=self.config.training_params.learning_rate,
+                save_steps=self.config.training_params.save_steps,
                 wandb_enabled=self.config.wandb_api_key is not None,
                 validation_data_dir=val_data_dir,
                 timeout_seconds=timeout_seconds,
@@ -1298,6 +1300,18 @@ class Gr00tTrainer(BaseTrainer):
                             path_in_repo=str(rel_path),
                             repo_id=self.config.model_name,
                         )
+
+            # Also upload checkpoint directories if they exist, named as "checkpoint-<number>"
+            for item in files_directory.glob("checkpoint-*"):
+                if item.is_dir():
+                    rel_path = item.relative_to(files_directory)
+                    logger.info(f"Uploading checkpoint directory: {item} as {rel_path}")
+                    api.upload_file(
+                        repo_type="model",
+                        path_or_fileobj=str(item.resolve()),
+                        path_in_repo=str(rel_path),
+                        repo_id=self.config.model_name,
+                    )
 
             # Upload README last
             readme = generate_readme(

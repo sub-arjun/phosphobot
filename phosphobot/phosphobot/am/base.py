@@ -95,6 +95,12 @@ class TrainingParamsAct(BaseModel):
         gt=0,
         le=1_000_000,
     )
+    save_steps: int = Field(
+        default=5_000,
+        description="Number of steps between saving the model, leave it to None to get the default value",
+        gt=0,
+        le=1_000_000,
+    )
 
     class Config:
         extra = "forbid"
@@ -167,6 +173,12 @@ class TrainingParamsGr00T(BaseModel):
         description="Number of epochs to train for, default is 10",
         gt=0,
         le=100,
+    )
+    save_steps: int = Field(
+        default=1_000,
+        description="Number of steps between saving the model, default is 1000",
+        gt=0,
+        le=100_000,
     )
     learning_rate: float = Field(
         default=0.0001,
