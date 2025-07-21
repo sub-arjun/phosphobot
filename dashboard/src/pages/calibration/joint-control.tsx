@@ -1,3 +1,5 @@
+"use client";
+
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Card,
@@ -19,8 +21,8 @@ import { Line, LineChart, ResponsiveContainer, YAxis } from "recharts";
 type PositionDataPoint = { time: number; value: number; goal: number };
 type TorqueDataPoint = { time: number; value: number };
 
-// Physical limits for joints (radians)
-const POSITION_LIMIT = Math.PI;
+// Physical limits for joints (motor units)
+const POSITION_LIMIT = 4095;
 // Example torque limits (adjust as needed)
 const TORQUE_LIMIT = 500; // replace with actual joint torque limit
 
@@ -34,6 +36,7 @@ export function JointControl() {
   const [updateInterval, setUpdateInterval] = useState(0.1);
   const [plotOption, setPlotOption] = useState<string>("Position");
   const [error, setError] = useState("");
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const [positionBuffers, setPositionBuffers] = useState<PositionDataPoint[][]>(
     Array(NUM_JOINTS)
@@ -46,6 +49,7 @@ export function JointControl() {
         })),
       ),
   );
+
   const [torqueBuffers, setTorqueBuffers] = useState<TorqueDataPoint[][]>(
     Array(NUM_JOINTS)
       .fill(null)
@@ -53,6 +57,7 @@ export function JointControl() {
         Array.from({ length: NUM_POINTS }, (_, i) => ({ time: i, value: 0 })),
       ),
   );
+
   const [jointPositions, setJointPositions] = useState<number[]>(
     Array(NUM_JOINTS).fill(0),
   );
@@ -77,7 +82,7 @@ export function JointControl() {
 
   const fetchJointPositions = async (): Promise<number[]> => {
     const data = await fetchWithBaseUrl(`/joints/read`, "POST", {
-      unit: "rad",
+      unit: "motor_units",
       joints_ids: null,
     });
     return Array.isArray(data.angles) ? data.angles : jointPositions;
@@ -92,8 +97,33 @@ export function JointControl() {
     if (!isConnected) return;
     await fetchWithBaseUrl(`/joints/write`, "POST", {
       angles: goalAngles,
-      unit: "rad",
+      unit: "motor_units",
     });
+  };
+
+  // Initialize joints from API
+  const initializeJoints = async () => {
+    try {
+      const positions = await fetchJointPositions();
+      setJointPositions(positions);
+      setGoalAngles(positions);
+
+      // Initialize position buffers with current positions
+      setPositionBuffers((prev) =>
+        prev.map((buf, idx) =>
+          buf.map((pt) => ({
+            ...pt,
+            value: positions[idx],
+            goal: positions[idx],
+          })),
+        ),
+      );
+
+      setIsInitialized(true);
+    } catch (err) {
+      console.error("Failed to initialize joint positions:", err);
+      setError("Failed to initialize joint positions");
+    }
   };
 
   const updateJointGoalAngle = async (jointIndex: number, value: number) => {
@@ -112,15 +142,28 @@ export function JointControl() {
   };
 
   useEffect(() => {
-    checkConnection();
+    const initialize = async () => {
+      await checkConnection();
+      if (!isInitialized) {
+        await initializeJoints();
+      }
+    };
+
+    initialize();
+  }, [isInitialized, initializeJoints]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
 
     const updateData = async () => {
       if (!isConnected) return;
+
       try {
         const [positions, torques] = await Promise.all([
           fetchJointPositions(),
           fetchJointTorques(),
         ]);
+
         setJointPositions(positions);
         setJointTorques(torques);
 
@@ -135,6 +178,7 @@ export function JointControl() {
             return next;
           }),
         );
+
         setTorqueBuffers((prev) =>
           prev.map((buf, idx) => {
             const next = buf.slice(1);
@@ -155,7 +199,6 @@ export function JointControl() {
       await checkConnection();
       await updateData();
     }, updateInterval * 1000);
-
     (async () => {
       await checkConnection();
       await updateData();
@@ -164,7 +207,7 @@ export function JointControl() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [updateInterval, goalAngles, isConnected]);
+  }, [updateInterval, goalAngles, isConnected, isInitialized]);
 
   return (
     <div className="container mx-auto p-4 max-w-7xl">
@@ -181,27 +224,29 @@ export function JointControl() {
               <CardTitle className="flex items-center gap-2">
                 <Sliders className="h-5 w-5" /> Joint Controls
               </CardTitle>
-              <CardDescription>Adjust joint angles</CardDescription>
+              <CardDescription>
+                Adjust joint positions (motor units)
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {goalAngles.map((angle, i) => (
                 <div key={i} className="space-y-3">
                   <div className="flex justify-between items-center">
                     <Label htmlFor={`joint-${i}`}>Joint {i + 1}</Label>
-                    <span>{angle.toFixed(2)} rad</span>
+                    <span>{Math.round(angle)} units</span>
                   </div>
                   <Slider
                     id={`joint-${i}`}
-                    min={-Math.PI}
-                    max={Math.PI}
-                    step={0.01}
+                    min={-4095}
+                    max={POSITION_LIMIT}
+                    step={1}
                     value={[angle]}
                     onValueChange={(vals) => updateJointGoalAngle(i, vals[0])}
                   />
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>-π</span>
+                    <span>-4095</span>
                     <span>0</span>
-                    <span>π</span>
+                    <span>4095</span>
                   </div>
                 </div>
               ))}
@@ -240,7 +285,6 @@ export function JointControl() {
                     </div>
                   </RadioGroup>
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="update-interval">
                     Update Interval (seconds)
@@ -302,7 +346,11 @@ export function JointControl() {
                                 ? [-POSITION_LIMIT, POSITION_LIMIT]
                                 : [-TORQUE_LIMIT, TORQUE_LIMIT]
                             }
-                            tickFormatter={(value) => value.toFixed(3)}
+                            tickFormatter={(value) =>
+                              plotOption === "Position"
+                                ? Math.round(value).toString()
+                                : value.toFixed(1)
+                            }
                           />
                           <Line
                             type="monotone"
