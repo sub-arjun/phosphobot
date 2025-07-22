@@ -998,6 +998,12 @@ def fastapi_app():
             supabase_user_email = metadata.get("supabase_user_email")
             supabase_user_id = metadata.get("supabase_user_id")
 
+            if not supabase_user_email or not supabase_user_id:
+                logger.error(
+                    "Checkout session metadata is missing supabase_user_email or supabase_user_id"
+                )
+                return {"status": "ok"}
+
             if checkout_session.payment_status != "unpaid":
                 # If the user already exists, update the plan to pro, add the stripe customer id and the subscription id
                 if supabase_user_id:
