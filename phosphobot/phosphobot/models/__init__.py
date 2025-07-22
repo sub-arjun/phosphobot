@@ -22,6 +22,7 @@ from .robot import (
     BaseRobotPIDGains,
     RobotConfigStatus,
     Temperature,
+    RobotConfigResponse,
 )
 
 

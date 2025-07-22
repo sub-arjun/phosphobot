@@ -138,7 +138,6 @@ class Predictor:
 
             # Handle the validation datase
 
-            ###
             training_params = TrainingParamsGr00T(
                 batch_size=batch_size,
                 epochs=epochs,

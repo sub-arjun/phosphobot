@@ -1,6 +1,6 @@
 [project]
 name = "phosphobot"
-version = "0.3.66"
+version = "0.3.69"
 description = "The AI-ready robotics dev kit, with built-in remote control and VLA support."
 authors = [{ name = "phospho", email = "contact@phospho.ai" }]
 license = "MIT"
@@ -31,7 +31,7 @@ dependencies = [
     "datasets>=3.2.0",
     "sentry-sdk[fastapi]>=2.20.0",
     "posthog>=6.0.0",
-    "piper-sdk>=0.1.16",
+    "piper-sdk>=0.4.0",
     "supabase>=2.15.0",
     "zmq>=0.0.0",
     "toml>=0.10.2",

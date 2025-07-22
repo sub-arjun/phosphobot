@@ -6,9 +6,8 @@ from pathlib import Path
 from typing import Any
 
 import cv2
-import wandb
-import shutil
 import numpy as np
+import wandb
 from fastapi import Response
 from huggingface_hub import HfApi, snapshot_download
 from loguru import logger
@@ -509,6 +508,51 @@ async def serve(
                         detail=str(e),
                     )
 
+            def _update_server_status(
+                supabase_client: Client,
+                server_id: int,
+                status: str,
+            ):
+                logger.info(
+                    f"Updating server status to {status} for server_id {server_id}"
+                )
+                if status == "failed":
+                    server_payload = {
+                        "status": status,
+                        "terminated_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    supabase_client.table("servers").update(server_payload).eq(
+                        "id", server_id
+                    ).execute()
+                    # Update also the AI control session
+                    ai_control_payload = {
+                        "status": "stopped",
+                        "ended_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    supabase_client.table("ai_control_sessions").update(
+                        ai_control_payload
+                    ).eq("server_id", server_id).execute()
+                elif status == "stopped":
+                    server_payload = {
+                        "status": status,
+                        "terminated_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    supabase_client.table("servers").update(server_payload).eq(
+                        "id", server_id
+                    ).execute()
+                    # Update also the AI control session
+                    ai_control_payload = {
+                        "status": "stopped",
+                        "ended_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    supabase_client.table("ai_control_sessions").update(
+                        ai_control_payload
+                    ).eq("server_id", server_id).execute()
+                else:
+                    raise NotImplementedError(
+                        f"Status '{status}' not implemented for server update"
+                    )
+
             # Send tunnel info back to caller if queue is provided
             if q is not None:
                 tunnel_info = {
@@ -543,8 +587,10 @@ async def serve(
                 logger.info(
                     "Timeout reached for Inference FastAPI server. Shutting down."
                 )
+                _update_server_status(supabase_client, server_id, "stopped")
             except Exception as e:
                 logger.error(f"Server error: {e}")
+                _update_server_status(supabase_client, server_id, "failed")
                 raise HTTPException(
                     status_code=500,
                     detail=f"Server error: {e}",
@@ -552,53 +598,19 @@ async def serve(
             finally:
                 logger.info("Shutting down FastAPI server")
                 await inference_fastapi_server.shutdown()
+
+        except HTTPException as e:
+            logger.error(f"HTTPException during server setup: {e.detail}")
+            _update_server_status(supabase_client, server_id, "failed")
+            raise e
+
         except Exception as e:
             logger.error(f"Error during server setup: {e}")
-            # Update the server status in the database
-            try:
-                update_date = {
-                    "status": "failed",
-                    "terminated_at": datetime.now(timezone.utc).isoformat(),
-                }
-                supabase_client.table("servers").update(update_date).eq(
-                    "id", server_id
-                ).execute()
-                logger.info(f"Updated server info in database: {update_date}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Server setup failed: {e}",
-                )
-            except Exception as e:
-                logger.error(f"Failed to update server info in database: {e}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Server setup failed: {e}",
-                )
-        finally:
-            try:
-                # Update the server status in the database
-                update_date_servers = {
-                    "status": "stopped",
-                    "terminated_at": datetime.now(timezone.utc).isoformat(),
-                }
-                supabase_client.table("servers").update(update_date_servers).eq(
-                    "id", server_id
-                ).execute()
-                logger.info(f"Updated server info in database: {update_date_servers}")
-
-                # Update the ai_control_servers table
-                update_date_ai_control = {
-                    "status": "stopped",
-                    "ended_at": datetime.now(timezone.utc).isoformat(),
-                }
-                supabase_client.table("ai_control_sessions").update(
-                    update_date_ai_control
-                ).eq("server_id", server_id).execute()
-                logger.info(
-                    f"Updated ai_control_servers info in database: {update_date_ai_control}"
-                )
-            except Exception as e:
-                logger.error(f"Failed to update server info in database: {e}")
+            _update_server_status(supabase_client, server_id, "failed")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error during server setup: {e}",
+            )
 
 
 @app.function(

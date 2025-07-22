@@ -4,6 +4,7 @@ import json
 from copy import copy
 from typing import Literal, cast
 
+import httpx
 import json_numpy  # type: ignore
 import numpy as np
 from dateutil import parser  # type: ignore
@@ -48,6 +49,7 @@ from phosphobot.models import (
     VoltageReadResponse,
     TemperatureReadResponse,
     TemperatureWriteRequest,
+    RobotConfigResponse,
 )
 from phosphobot.robot import (
     RemotePhosphobot,
@@ -63,7 +65,8 @@ from phosphobot.teleoperation import (
     get_teleop_manager,
     get_udp_server,
 )
-from phosphobot.utils import background_task_log_exceptions
+from phosphobot.utils import background_task_log_exceptions, get_tokens
+
 
 # This is used to send numpy arrays as JSON to OpenVLA server
 json_numpy.patch()
@@ -369,7 +372,6 @@ async def move_relative(
                 detail=f"Robot {robot.name} .move_to_initial_position() did not set initial position or orientation: {initial_position=}, {initial_orientation_rad=}",
             )
 
-    logger.info(f"Received relative data: {data}")
     delta_position = np.array([data.x, data.y, data.z])
     delta_orientation_euler_degrees = np.array([data.rx, data.ry, data.rz])
     open = data.open if data.open is not None else None
@@ -397,10 +399,6 @@ async def move_relative(
     # Round to 3 decimals
     target_position = np.round(target_position, 3)
     target_orientation = np.round(target_orientation, 3)
-
-    logger.info(
-        f"Target position: {target_position}. Target orientation: {target_orientation}"
-    )
 
     await move_to_absolute_position(
         query=MoveAbsoluteRequest(
@@ -1218,6 +1216,7 @@ async def start_auto_control(
 )
 async def stop_auto_control(
     rcm: RobotConnectionManager = Depends(get_rcm),
+    session=Depends(user_is_logged_in),
 ) -> StatusResponse:
     """
     Stop the auto control by AI
@@ -1226,7 +1225,19 @@ async def stop_auto_control(
         return StatusResponse(message="Auto control is not running")
 
     ai_control_signal.stop()
-    return StatusResponse(message="Stopping auto control")
+
+    tokens = get_tokens()
+
+    # Call the /stop endpoint in Modal
+    async with httpx.AsyncClient(timeout=5) as client:
+        await client.post(
+            url=f"{tokens.MODAL_API_URL}/stop",
+            headers={
+                "Authorization": f"Bearer {session.access_token}",
+                "Content-Type": "application/json",
+            },
+        )
+    return StatusResponse(message="Stopped AI control")
 
 
 @router.post(
@@ -1245,7 +1256,7 @@ async def pause_auto_control(
         return StatusResponse(message="Auto control is not running")
 
     ai_control_signal.status = "paused"
-    return StatusResponse(message="Pausing auto control")
+    return StatusResponse(message="Pausing AI control")
 
 
 @router.post(
@@ -1261,10 +1272,10 @@ async def resume_auto_control(
     Resume the auto control by AI
     """
     if ai_control_signal.status == "running":
-        return StatusResponse(message="Auto control is already running")
+        return StatusResponse(message="AI control is already running")
 
     ai_control_signal.status = "running"
-    return StatusResponse(message="Resuming auto control")
+    return StatusResponse(message="Resuming AI control")
 
 
 @router.post(
@@ -1283,11 +1294,7 @@ async def feedback_auto_control(
 
     await (
         supabase_client.table("ai_control_sessions")
-        .update(
-            {
-                "feedback": request.feedback,
-            }
-        )
+        .update({"feedback": request.feedback})
         .eq("id", request.ai_control_id)
         .execute()
     )
@@ -1317,3 +1324,30 @@ async def add_robot_connection(
         raise HTTPException(
             status_code=400, detail=f"Failed to add robot connection: {e}"
         )
+
+
+@router.post("/robot/config", response_model=RobotConfigResponse)
+async def get_robot_config(
+    robot_id: int = 0,
+    rcm: RobotConnectionManager = Depends(get_rcm),
+) -> RobotConfigResponse:
+    """
+    Get the configuration of the robot.
+    """
+    robot = await rcm.get_robot(robot_id)
+
+    if isinstance(robot, BaseManipulator) or isinstance(robot, RemotePhosphobot):
+        config = robot.config
+        return RobotConfigResponse(
+            robot_id=robot_id,
+            name=robot.name,
+            config=config,
+            gripper_joint_index=robot.GRIPPER_JOINT_INDEX,
+            servo_ids=robot.SERVO_IDS,
+            resolution=robot.RESOLUTION,
+        )
+
+    raise HTTPException(
+        status_code=400,
+        detail=f"Robot {robot.name} does not support configuration retrieval.",
+    )

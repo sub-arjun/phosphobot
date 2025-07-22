@@ -2,6 +2,7 @@ import os
 import threading
 from pathlib import Path
 
+from fastapi import HTTPException
 import sentry_sdk
 from huggingface_hub import HfApi
 from loguru import logger
@@ -92,6 +93,49 @@ def serve(
     from huggingface_hub import snapshot_download  # type: ignore
 
     from supabase import Client, create_client
+
+    def _update_server_status(
+        supabase_client: Client,
+        server_id: int,
+        status: str,
+    ):
+        logger.info(f"Updating server status to {status} for server_id {server_id}")
+        if status == "failed":
+            server_payload = {
+                "status": status,
+                "terminated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            supabase_client.table("servers").update(server_payload).eq(
+                "id", server_id
+            ).execute()
+            # Update also the AI control session
+            ai_control_payload = {
+                "status": "stopped",
+                "ended_at": datetime.now(timezone.utc).isoformat(),
+            }
+            supabase_client.table("ai_control_sessions").update(ai_control_payload).eq(
+                "server_id", server_id
+            ).execute()
+        elif status == "stopped":
+            server_payload = {
+                "status": status,
+                "terminated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            supabase_client.table("servers").update(server_payload).eq(
+                "id", server_id
+            ).execute()
+            # Update also the AI control session
+            ai_control_payload = {
+                "status": "stopped",
+                "ended_at": datetime.now(timezone.utc).isoformat(),
+            }
+            supabase_client.table("ai_control_sessions").update(ai_control_payload).eq(
+                "server_id", server_id
+            ).execute()
+        else:
+            raise NotImplementedError(
+                f"Status '{status}' not implemented for server update"
+            )
 
     # Start timer
     start_time = time.time()
@@ -218,36 +262,11 @@ def serve(
                     f"Timeout reached after {timeout} seconds, stopping server..."
                 )
                 server.running = False
-
+                _update_server_status(supabase_client, server_id, "stopped")
                 # Give it a moment to shut down gracefully
                 server_thread.join(timeout=5)
             else:
                 logger.info("Server exited before timeout")
-        finally:
-            try:
-                # Update the server status in the database
-                update_data_servers = {
-                    "status": "stopped",
-                    "terminated_at": datetime.now(timezone.utc).isoformat(),
-                }
-                supabase_client.table("servers").update(update_data_servers).eq(
-                    "id", server_id
-                ).execute()
-                logger.info(f"Updated server info in database: {update_data_servers}")
-
-                # Update the server status in the database
-                update_data_ai_control = {
-                    "status": "stopped",
-                    "ended_at": datetime.now(timezone.utc).isoformat(),
-                }
-                supabase_client.table("ai_control_sessions").update(
-                    update_data_ai_control
-                ).eq("server_id", server_id).execute()
-                logger.info(
-                    f"Updated AI control session info in database: {update_data_ai_control}"
-                )
-            except Exception as e:
-                logger.error(f"Failed to update server info in database: {e}")
 
             # Push the model to the volume if it is not already there
             if not os.path.exists(f"/data/models/{model_id}"):
@@ -258,6 +277,14 @@ def serve(
                 shutil.copytree(local_model_path, f"/data/models/{model_id}")
                 gr00t_volume.commit()
                 logger.info(f"Model {model_id} pushed to Modal volume")
+
+        except Exception as e:
+            logger.error(f"Server error: {e}")
+            _update_server_status(supabase_client, server_id, "failed")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Server error: {e}",
+            )
 
 
 @app.function(
