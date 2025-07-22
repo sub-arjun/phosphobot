@@ -259,15 +259,32 @@ class TrainingRequest(BaseTrainerConfig):
         # So we can upload it to the phospho Hugging Face repo
         size = model_name.split("/")
 
+        def clamp_length(name: str, max_length: int) -> str:
+            """Clamp the length of the model name to a maximum length."""
+            if len(name) > max_length:
+                return name[:max_length]
+            return name
+
         if len(size) == 1:
+            # Make sure the total model_name is shorter than 96 characters
+            model_name = clamp_length(
+                model_name, 96 - len(random_chars) - len("phospho-app/")
+            )
+
             model_name = "phospho-app/" + model_name + "-" + random_chars
         elif len(size) == 2:
             if size[0] != "phospho-app":
+                # Make sure the total model_name is shorter than 96 characters
+                size[1] = clamp_length(
+                    size[1], 96 - len(random_chars) - len("phospho-app/")
+                )
+
                 model_name = "phospho-app/" + size[1] + "-" + random_chars
         else:
             raise ValueError(
                 "Model name should be in the format phospho-app/<model_name> or <model_name>",
             )
+
         return model_name
 
     @field_validator("dataset_name", mode="before")
