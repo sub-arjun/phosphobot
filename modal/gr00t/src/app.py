@@ -135,7 +135,7 @@ def serve(
         # Check if we have the model in the volume
         model_path = f"/data/models/{model_id}"
         if checkpoint is not None:
-            model_path = f"/data/models/{model_id}/checkpoint-{checkpoint}"
+            model_path = f"/data/models/{model_id}/{checkpoint}"
 
         # Check if this path exists in the container
         if not os.path.exists(model_path):
@@ -145,35 +145,20 @@ def serve(
             # Downloading the model from HF
             try:
                 # Don't download the whole repo, just the checkpoint
-                model_path = snapshot_download(
-                    repo_id=model_id,
-                    repo_type="model",
-                    revision="main",
-                    local_dir=model_path,
-                    allow_patterns=[
-                        f"checkpoint-{checkpoint}/*" if checkpoint is not None else "*"
-                    ],
-                    ignore_patterns=["checkpoint-*" if checkpoint is None else ""],
-                )
-                # Count the number of files downloaded
-                num_files = len(
-                    [
-                        f
-                        for f in Path(model_path).rglob("*")
-                        if f.is_file() and not f.name.startswith(".")
-                    ]
-                )
-                if num_files == 0:
-                    logger.info(f"No files found in the downloaded model {model_id}")
-                    if checkpoint is not None:
-                        logger.info("Fetching latest model instead...")
-                        model_path = snapshot_download(
-                            repo_id=model_id,
-                            repo_type="model",
-                            revision="main",
-                            local_dir=f"/data/models/{model_id}",
-                            ignore_patterns=["checkpoint-*"],
-                        )
+                if checkpoint is not None:
+                    model_path = snapshot_download(
+                        repo_id=model_id,
+                        repo_type="model",
+                        revision=str(checkpoint),
+                        local_dir=model_path,
+                    )
+                else:
+                    model_path = snapshot_download(
+                        repo_id=model_id,
+                        repo_type="model",
+                        revision="main",
+                        local_dir=model_path,
+                    )
 
             except Exception as e:
                 logger.info(

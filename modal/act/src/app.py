@@ -106,9 +106,8 @@ def find_model_path(model_id: str, checkpoint: int | None = None) -> str | None:
         return None
     if checkpoint is not None:
         # format the checkpoint to be 6 digits long
-        checkpoint_formated = f"{checkpoint:06d}"
         model_path = (
-            model_path / "checkpoints" / checkpoint_formated / "pretrained_model"
+            model_path / latest_timestamp / "checkpoints" / str(checkpoint) / "pretrained_model"
         )
         if model_path.exists():
             return str(model_path.resolve())
@@ -272,30 +271,15 @@ async def serve(
                 f"🤗 Model {model_id} not found in Modal volume. Will be downloaded from HuggingFace."
             )
             try:
-                checkpoint_formated = (
-                    f"{checkpoint:06d}" if checkpoint is not None else "last"
-                )
                 current_timestamp = str(datetime.now(timezone.utc).timestamp())
                 if checkpoint:
                     model_path = snapshot_download(
                         repo_id=model_id,
                         repo_type="model",
-                        revision="main",
-                        local_dir=f"/data/{model_id}/{current_timestamp}/checkpoints/{checkpoint_formated}/pretrained_model",
-                        allow_patterns=[f"checkpoint-{checkpoint}/*"],
+                        revision=str(checkpoint),
+                        local_dir=f"/data/{model_id}/{current_timestamp}/checkpoints/{checkpoint}/pretrained_model",
                         token=os.getenv("HF_TOKEN"),
                     )
-                    # Copy files one dir up
-                    src_dir = Path(model_path)
-                    dst_dir = src_dir.parent
-
-                    for item in src_dir.iterdir():
-                        target = dst_dir / item.name
-                        if item.is_file():
-                            shutil.copy2(item, target)
-
-                    # Remove the original checkpoint directory
-                    shutil.rmtree(src_dir)
                 else:
                     model_path = snapshot_download(
                         repo_id=model_id,
@@ -304,26 +288,8 @@ async def serve(
                         local_dir=f"/data/{model_id}/{current_timestamp}/checkpoints/last/pretrained_model",
                         ignore_patterns=["checkpoint-*"],
                     )
-                num_files = len(
-                    [
-                        f
-                        for f in Path(model_path).rglob("*")
-                        if f.is_file() and not f.name.startswith(".")
-                    ]
-                )
-                if num_files == 0:
-                    logger.info(f"No files found in the downloaded model {model_id}")
-                    if checkpoint is not None:
-                        logger.info("Fetching latest model instead...")
-                        model_path = snapshot_download(
-                            repo_id=model_id,
-                            repo_type="model",
-                            revision="main",
-                            local_dir=f"/data/models/{model_id}/{current_timestamp}/checkpoints/last/pretrained_model",
-                            ignore_patterns=["checkpoint-*"],
-                        )
             except Exception as e:
-                logger.error(f"Failed to download model {model_id}: {e}")
+                logger.error(f"Failed to download model {model_id} with checkpoint {checkpoint}: {e}")
                 raise e
         else:
             logger.info(
@@ -892,10 +858,20 @@ def train(  # All these args should be verified in phosphobot
                     continue
                 checkpoint_number = int(rel_path.parts[1])
 
+                # Create revision if it doesn't exist
+                api.create_branch(
+                    repo_id=model_name,
+                    repo_type="model",
+                    branch=str(checkpoint_number),
+                    token=hf_token,
+                    exist_ok=True,
+                )
+
                 api.upload_file(
                     repo_type="model",
+                    revision=str(checkpoint_number),
                     path_or_fileobj=str(item.resolve()),
-                    path_in_repo=f"checkpoint-{checkpoint_number}/{item.name}",
+                    path_in_repo=item.name,
                     repo_id=model_name,
                     token=hf_token,
                 )

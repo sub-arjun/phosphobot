@@ -1307,12 +1307,31 @@ class Gr00tTrainer(BaseTrainer):
                     # Upload the entire directory structure
                     for sub_item in item.glob("**/*"):
                         if sub_item.is_file():
-                            sub_rel_path = sub_item.relative_to(files_directory)
-                            logger.info(f"Uploading file: {sub_item} as {sub_rel_path}")
+                            logger.info(f"Uploading file: {sub_item}")
+                            # if the name starts with tmp/ we skip it
+                            if sub_item.name.startswith("tmp/"):
+                                continue
+                            # Parse the checkpoint number as an int
+                            try:
+                                # Should be 100, 400, etc.
+                                checkpoint_number = int(item.name.split("-")[-1])
+                            except ValueError:
+                                # Can also be "last" or similar
+                                logger.debug(
+                                    f"Skipping upload for {sub_item} as it does not have a valid checkpoint number"
+                                )
+                                continue
+                            api.create_branch(
+                                repo_type="model",
+                                branch=str(checkpoint_number),
+                                exist_ok=True,
+                                repo_id=self.config.model_name,
+                            )
                             api.upload_file(
                                 repo_type="model",
+                                revision=str(checkpoint_number),
                                 path_or_fileobj=str(sub_item.resolve()),
-                                path_in_repo=str(sub_rel_path),
+                                path_in_repo=str(sub_item),
                                 repo_id=self.config.model_name,
                             )
 
