@@ -992,6 +992,13 @@ def fastapi_app():
             )
             logger.info(f"Checkout session: {checkout_session}")
 
+            # Check if this is a subscription checkout session
+            if not checkout_session.get("subscription"):
+                logger.info(
+                    "Checkout session does not have a subscription, ignoring event"
+                )
+                return {"status": "ok"}
+
             # Extract metadata fields
             # metadata is a dict or None, so we need to handle the case where it is None
             metadata = checkout_session.metadata or {}
