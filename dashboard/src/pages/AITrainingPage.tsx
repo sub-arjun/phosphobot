@@ -221,6 +221,7 @@ export function AITrainingPage() {
     const [, datasetName] = dataset.split("/");
 
     // Fetch whoami to get the username
+    let middlePart = "";
     try {
       const result = await fetchWithBaseUrl(
         "/admin/huggingface/whoami",
@@ -229,16 +230,25 @@ export function AITrainingPage() {
       // Check the status from the whoami response
       if (result.status === "success" && result.username) {
         // Include username in the model name if status is success
-        return `phospho-app/${result.username}-${selectedModelType}-${datasetName}-${randomChars}`;
+        middlePart = `${result.username}-${selectedModelType}-${datasetName}`;
       } else {
         // Fallback without username if status is not success
-        return `phospho-app/${selectedModelType}-${datasetName}-${randomChars}`;
+        middlePart = `${selectedModelType}-${datasetName}`;
       }
     } catch (error) {
       console.error("Error fetching whoami:", error);
       // Fallback without username in case of error
-      return `phospho-app/${selectedModelType}-${datasetName}-${randomChars}`;
+      middlePart = `${selectedModelType}-${datasetName}`;
     }
+    // Ensure total model name doesn't exceed 96 characters
+    // "phospho-app/" = 13 chars, "-" + randomChars = 11 chars, so middlePart max = 96 - 13 - 11 = 72
+    const maxMiddleLength = 72;
+    if (middlePart.length > maxMiddleLength) {
+      middlePart = middlePart.substring(0, maxMiddleLength);
+    }
+
+    const modelName = `phospho-app/${middlePart}-${randomChars}`;
+    return modelName;
   };
 
   const handleTrainModel = async () => {
