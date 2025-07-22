@@ -152,12 +152,13 @@ export function AIControlPage() {
               console.log("New status : ", newStatus);
               return;
             }
-
-            console.log("AI control status updated:", newStatus);
-            mutateAIStatus({
-              ...aiStatus,
-              status: newStatus,
-            });
+            if (newStatus !== aiStatus.status) {
+              console.log("AI control status updated:", newStatus);
+              mutateAIStatus({
+                ...aiStatus,
+                status: newStatus,
+              });
+            }
           }
         },
       )
@@ -517,7 +518,7 @@ export function AIControlPage() {
 
           {/* Cassette Player Style Control Panel */}
           {showCassette && (
-            <div className="bg-gray-100 p-6 rounded-lg shadow-inner">
+            <div className="bg-muted p-6 rounded-lg">
               <div className="flex flex-col items-center space-y-4">
                 {/* Message top of cassette */}
                 <div className="text-center mb-2">
@@ -533,8 +534,8 @@ export function AIControlPage() {
                     className={`h-16 w-16 rounded-full ${
                       aiStatus?.status === "stopped" ||
                       aiStatus?.status === "paused"
-                        ? "bg-green-600 hover:bg-green-700"
-                        : "bg-gray-400 cursor-not-allowed"
+                        ? "bg-green-500 hover:bg-green-600"
+                        : "bg-muted-foreground cursor-not-allowed"
                     }`}
                     onClick={
                       aiStatus?.status === "stopped"
@@ -574,7 +575,7 @@ export function AIControlPage() {
                     className={`h-16 w-16 rounded-full ${
                       aiStatus?.status === "running"
                         ? "bg-amber-500 hover:bg-amber-600"
-                        : "bg-gray-400 cursor-not-allowed"
+                        : "bg-muted-foreground cursor-not-allowed"
                     }`}
                     onClick={pauseControl}
                     disabled={aiStatus?.status !== "running"}
@@ -589,8 +590,8 @@ export function AIControlPage() {
                     variant="default"
                     className={`h-16 w-16 rounded-full ${
                       aiStatus?.status !== "stopped"
-                        ? "bg-red-600 hover:bg-red-700"
-                        : "bg-gray-400 cursor-not-allowed"
+                        ? "bg-red-500 hover:bg-red-600"
+                        : "bg-muted-foreground cursor-not-allowed"
                     }`}
                     onClick={stopControl}
                     disabled={aiStatus?.status === "stopped"}
@@ -601,7 +602,7 @@ export function AIControlPage() {
                   </Button>
                 </div>
 
-                <div className="text-xs text-center text-gray-500 mt-2">
+                <div className="text-xs text-center mt-2 text-muted-foreground">
                   {aiStatus?.status === "stopped"
                     ? "Ready to start"
                     : aiStatus?.status === "paused"
