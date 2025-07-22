@@ -11,7 +11,7 @@ from huggingface_hub import HfApi
 from loguru import logger
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from phosphobot.models import InfoModel
+from phosphobot.models import InfoModel, ModelConfigurationResponse
 
 # Disable PyAV logs
 av.logging.set_level(None)
@@ -35,13 +35,14 @@ class ActionModel(ABC):
         self.server_port = server_port
 
     @classmethod
-    def fetch_and_get_video_keys(cls, model_id: str) -> list[str]:
+    def fetch_and_get_configuration(cls, model_id: str) -> ModelConfigurationResponse:
         """
-        Fetch the model from Hugging Face and get the video keys.
+        Fetch the model from Hugging Face and get the configuration.
         Args:
             model_id (str): Model ID on Hugging Face.
         Returns:
-            list[str]: List of video keys.
+            video_keys, list[str]: List of configuration keys.
+            checkpoints, list[str]: List of available checkpoints.
         """
         raise NotImplementedError(
             f"This method is not implemented in {cls.__name__}. You need to implement it in your subclass."
@@ -92,6 +93,12 @@ class TrainingParamsAct(BaseModel):
     steps: int | None = Field(
         default=None,
         description="Number of training steps, leave it to None to auto-detect based on your dataset",
+        gt=0,
+        le=1_000_000,
+    )
+    save_steps: int = Field(
+        default=5_000,
+        description="Number of steps between saving the model, leave it to None to get the default value",
         gt=0,
         le=1_000_000,
     )
@@ -167,6 +174,12 @@ class TrainingParamsGr00T(BaseModel):
         description="Number of epochs to train for, default is 10",
         gt=0,
         le=100,
+    )
+    save_steps: int = Field(
+        default=1_000,
+        description="Number of steps between saving the model, default is 1000",
+        gt=0,
+        le=100_000,
     )
     learning_rate: float = Field(
         default=0.0001,

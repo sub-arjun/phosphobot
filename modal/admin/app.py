@@ -254,6 +254,7 @@ class StartServerRequest(BaseModel):
     timeout: Annotated[int, Field(default=15 * MINUTES, ge=0)]
     region: Optional[Literal["us-east", "us-west", "eu", "ap", "anywhere"]] = None
     model_specifics: Gr00tSpawnConfig | ACTSpawnConfig
+    checkpoint: Optional[int] = None
 
     @field_validator("timeout", mode="before")
     def clamp_timeout(cls, v: int) -> int:
@@ -302,6 +303,7 @@ class SupabaseServersTable(BaseModel):
     started_at: Optional[str] = None
     terminated_at: Optional[str] = None
     region: Optional[str] = None
+    checkpoint: Optional[int] = None
     tcp_port: Optional[int] = None
     url: Optional[str] = None
     modal_function_call_id: Optional[str] = None
@@ -502,27 +504,29 @@ def fastapi_app():
         """
         # See https://modal.com/docs/guide/webhooks#token-based-authentication for token-based auth
 
-        try:
-            user = supabase_client.auth.get_user(jwt=token.credentials)
-            logger.debug(f"User: {user.user.email} ({user.user.id}) spawning server")
-        except Exception as e:
-            logger.error(f"Error getting user: {e}")
+        user = supabase_client.auth.get_user(jwt=token.credentials)
+        if user is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        logger.debug(f"User: {user.user.email} ({user.user.id}) spawning server")
 
-        active_servers = (
+        # Build the query for active servers
+        query = (
             supabase_client.table("servers")
             .select("*")
             .eq("user_id", user.user.id)
             .eq("status", "running")
             .eq("model_id", request.model_id)
             .is_("terminated_at", "null")
-            .limit(1)
-            .execute()
         )
+        if request.checkpoint is None:
+            query = query.is_("checkpoint", "null")
+        else:
+            query = query.eq("checkpoint", request.checkpoint)
+        active_servers = query.limit(1).execute()
 
         if active_servers.data:
             # Return the existing server info into a ServerInfo object
@@ -598,6 +602,7 @@ def fastapi_app():
                     "model_type": request.model_type,
                     "timeout": request.timeout,
                     "region": request.region,
+                    "checkpoint": request.checkpoint,
                     "requested_at": datetime.now(timezone.utc).isoformat(),
                 }
             )
@@ -633,6 +638,7 @@ def fastapi_app():
             # Spawn the serve function with the queue
             spawn_response = serve.spawn(
                 model_id=request.model_id,
+                checkpoint=request.checkpoint,
                 server_id=server_id,
                 timeout=request.timeout,
                 model_specifics=request.model_specifics,
@@ -687,16 +693,14 @@ def fastapi_app():
         """
         Stop all the currently running servers for the user
         """
-        try:
-            user = supabase_client.auth.get_user(jwt=token.credentials)
-            logger.debug(f"User: {user.user.email} ({user.user.id}) cancelling servers")
-        except Exception as e:
-            logger.error(f"Error getting user: {e}")
+        user = supabase_client.auth.get_user(jwt=token.credentials)
+        if user is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        logger.debug(f"User: {user.user.email} ({user.user.id}) cancelling servers")
 
         # Get all running servers for the user
         active_servers = (
@@ -748,16 +752,14 @@ def fastapi_app():
         token: HTTPAuthorizationCredentials = Depends(auth_scheme),
     ):
         # TODO: factorize using dependency injection
-        try:
-            user = supabase_client.auth.get_user(jwt=token.credentials)
-            logger.debug(f"User: {user.user.email} ({user.user.id}) spawning server")
-        except Exception as e:
-            logger.error(f"Error getting user: {e}")
+        user = supabase_client.auth.get_user(jwt=token.credentials)
+        if user is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        logger.debug(f"User: {user.user.email} ({user.user.id}) spawning server")
 
         active_trainings = (
             supabase_client.table("trainings")
@@ -883,18 +885,14 @@ def fastapi_app():
         """
         Cancel a training job by ID.
         """
-        try:
-            user = supabase_client.auth.get_user(jwt=token.credentials)
-            logger.debug(
-                f"User: {user.user.email} ({user.user.id}) cancelling training"
-            )
-        except Exception as e:
-            logger.error(f"Error getting user: {e}")
+        user = supabase_client.auth.get_user(jwt=token.credentials)
+        if user is None:
             raise HTTPException(
                 status_code=401,
                 detail="Invalid token",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        logger.debug(f"User: {user.user.email} ({user.user.id}) cancelling training")
 
         # Check if the training exists and belongs to the user
         training = (
@@ -908,7 +906,7 @@ def fastapi_app():
 
         if not training.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=404,
                 detail="Training not found or does not belong to the user",
             )
 

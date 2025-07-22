@@ -88,6 +88,7 @@ class Predictor:
         batch_size: int | None = None,
         epochs: int = 20,
         learning_rate: float = 0.0002,
+        save_steps: int = 20_000,
         validation_dataset_name: str | None = None,
     ):
         """Run a single prediction on the model"""
@@ -153,6 +154,7 @@ class Predictor:
                 ),
                 # model_name=hf_model_name,
                 path_to_gr00t_repo=".",
+                save_steps=save_steps,
             )
             config = Gr00tTrainerConfig(
                 dataset_name=dataset_repo_id,

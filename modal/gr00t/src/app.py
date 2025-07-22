@@ -77,6 +77,7 @@ def serve(
     model_id: str,
     server_id: int,
     model_specifics: Gr00tSpawnConfig,
+    checkpoint: int | None = None,
     timeout: int = FUNCTION_TIMEOUT,
     q=None,
 ):
@@ -177,12 +178,36 @@ def serve(
 
         # Check if we have the model in the volume
         model_path = f"/data/models/{model_id}"
+        if checkpoint is not None:
+            model_path = f"/data/models/{model_id}/{checkpoint}"
+
         # Check if this path exists in the container
         if not os.path.exists(model_path):
             logger.warning(
                 f"🤗 Model {model_id} not found in Modal volume. Will be downloaded from HuggingFace."
             )
-            model_path = model_id
+            # Downloading the model from HF
+            try:
+                # Don't download the whole repo, just the checkpoint
+                if checkpoint is not None:
+                    model_path = snapshot_download(
+                        repo_id=model_id,
+                        repo_type="model",
+                        revision=str(checkpoint),
+                        local_dir=model_path,
+                    )
+                else:
+                    model_path = snapshot_download(
+                        repo_id=model_id,
+                        repo_type="model",
+                        revision="main",
+                        local_dir=model_path,
+                    )
+
+            except Exception as e:
+                logger.info(
+                    f"Failed to download model {model_id} from HuggingFace: {e}"
+                )
         else:
             logger.info(f"⛏️ Model {model_id} found in Modal volume")
 
@@ -278,6 +303,7 @@ def serve_eu(
     model_id: str,
     server_id: int,
     model_specifics: Gr00tSpawnConfig,
+    checkpoint: int | None = None,
     timeout: int = 5 * MINUTES,
     q=None,
 ):
@@ -286,6 +312,7 @@ def serve_eu(
         model_id,
         server_id,
         model_specifics,
+        checkpoint,
         timeout,
         q,
     )
@@ -307,6 +334,7 @@ def serve_us_west(
     model_id: str,
     server_id: int,
     model_specifics: Gr00tSpawnConfig,
+    checkpoint: int | None = None,
     timeout: int = 5 * MINUTES,
     q=None,
 ):
@@ -315,6 +343,7 @@ def serve_us_west(
         model_id,
         server_id,
         model_specifics,
+        checkpoint,
         timeout,
         q,
     )
@@ -336,6 +365,7 @@ def serve_us_east(
     model_id: str,
     server_id: int,
     model_specifics: Gr00tSpawnConfig,
+    checkpoint: int | None = None,
     timeout: int = 5 * MINUTES,
     q=None,
 ):
@@ -344,6 +374,7 @@ def serve_us_east(
         model_id,
         server_id,
         model_specifics,
+        checkpoint,
         timeout,
         q,
     )
@@ -365,6 +396,7 @@ def serve_ap(
     model_id: str,
     server_id: int,
     model_specifics: Gr00tSpawnConfig,
+    checkpoint: int | None = None,
     timeout: int = 5 * MINUTES,
     q=None,
 ):
@@ -373,6 +405,7 @@ def serve_ap(
         model_id,
         server_id,
         model_specifics,
+        checkpoint,
         timeout,
         q,
     )
@@ -392,6 +425,7 @@ def serve_anywhere(
     model_id: str,
     server_id: int,
     model_specifics: Gr00tSpawnConfig,
+    checkpoint: int | None = None,
     timeout: int = 5 * MINUTES,
     q=None,
 ):
@@ -404,6 +438,7 @@ def serve_anywhere(
         model_id,
         server_id,
         model_specifics,
+        checkpoint,
         timeout,
         q,
     )

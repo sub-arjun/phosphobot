@@ -711,7 +711,7 @@ class DeleteEpisodeRequest(BaseModel):
     episode_id: int
 
 
-class ModelVideoKeysRequest(BaseModel):
+class ModelConfigurationRequest(BaseModel):
     model_id: str = Field(
         ...,
         description="Hugging Face model id to use",
@@ -725,11 +725,16 @@ class ModelVideoKeysRequest(BaseModel):
     )
 
 
-class ModelVideoKeysResponse(BaseModel):
+class ModelConfigurationResponse(BaseModel):
     video_keys: List[str] = Field(
         ...,
         description="List of video keys for the model. These are the keys used to access the videos in the dataset.",
         examples=[["video_0", "video_1"]],
+    )
+    checkpoints: List[str] = Field(
+        default_factory=list,
+        description="List of available checkpoints for the model.",
+        examples=[["100", "500"]],
     )
 
 
@@ -868,6 +873,11 @@ class StartAIControlRequest(BaseModel):
     verify_cameras: bool = Field(
         True,
         description="Whether to verify the setup before starting the AI control. If False, skips the verification step.",
+    )
+    checkpoint: int | None = Field(
+        None,
+        description="Checkpoint to use for the model. If None, uses the latest checkpoint.",
+        examples=[500],
     )
 
 

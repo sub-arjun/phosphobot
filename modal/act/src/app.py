@@ -87,27 +87,14 @@ act_volume = modal.Volume.from_name("act", create_if_missing=True)
 paligemma_detect = modal.Function.from_name("paligemma-detector", "detect_object")
 
 
-def find_model_path(
-    model_id: str,
-) -> str | None:
-    model_path = Path(f"/data/{model_id}/")
-    # Find the latest timestamp folder
-    if model_path.exists():
-        # Get the latest timestamp folder
-        latest_timestamp = max(
-            [
-                d
-                for d in os.listdir(model_path)
-                if os.path.isdir(os.path.join(model_path, d))
-            ],
-        )
-    else:
-        return None
-    if latest_timestamp is None:
-        return None
-    model_path = (
-        model_path / latest_timestamp / "checkpoints" / "last" / "pretrained_model"
-    )
+def find_model_path(model_id: str, checkpoint: int | None = None) -> str | None:
+    model_path = Path(f"/data/{model_id}")
+    if checkpoint is not None:
+        # format the checkpoint to be 6 digits long
+        model_path = model_path / "checkpoints" / str(checkpoint) / "pretrained_model"
+        if model_path.exists():
+            return str(model_path.resolve())
+    model_path = model_path / "checkpoints" / "last" / "pretrained_model"
     if not os.path.exists(model_path):
         return None
     return str(model_path.resolve())
@@ -153,7 +140,7 @@ async def run_act_training(
         "--policy.type=act",
         f"--batch_size={training_params.batch_size}",
         "--wandb.project=phospho-ACT",
-        "--save_freq=2000",  # Save a checkpoint every 2000 steps
+        f"--save_freq={training_params.save_steps}",
         f"--steps={training_params.steps}",
         "--policy.device=cuda",
         f"--output_dir={output_dir}",
@@ -215,6 +202,7 @@ async def serve(
     model_id: str,
     server_id: int,
     model_specifics: ACTSpawnConfig,
+    checkpoint: int | None = None,
     timeout: int = FUNCTION_TIMEOUT_INFERENCE,
     q=None,
 ):
@@ -257,24 +245,33 @@ async def serve(
     server_port = 80
 
     with modal.forward(server_port, unencrypted=True) as tunnel:
-        model_path = find_model_path(model_id=model_id)
+        model_path = find_model_path(model_id=model_id, checkpoint=checkpoint)
 
         if model_path is None:
             logger.warning(
                 f"🤗 Model {model_id} not found in Modal volume. Will be downloaded from HuggingFace."
             )
             try:
-                current_timestamp = str(datetime.now(timezone.utc).timestamp())
-                model_path = snapshot_download(
-                    repo_id=model_id,
-                    repo_type="model",
-                    revision="main",
-                    local_dir=f"/data/{model_id}/{current_timestamp}/checkpoints/last/pretrained_model",
-                    token=os.getenv("HF_TOKEN"),
-                )
-                logger.success(f"Model {model_id} downloaded to {model_path}")
+                if checkpoint:
+                    model_path = snapshot_download(
+                        repo_id=model_id,
+                        repo_type="model",
+                        revision=str(checkpoint),
+                        local_dir=f"/data/{model_id}/checkpoints/{checkpoint}/pretrained_model",
+                        token=os.getenv("HF_TOKEN"),
+                    )
+                else:
+                    model_path = snapshot_download(
+                        repo_id=model_id,
+                        repo_type="model",
+                        revision="main",
+                        local_dir=f"/data/{model_id}/checkpoints/last/pretrained_model",
+                        ignore_patterns=["checkpoint-*"],
+                    )
             except Exception as e:
-                logger.error(f"Failed to download model {model_id}: {e}")
+                logger.error(
+                    f"Failed to download model {model_id} with checkpoint {checkpoint}: {e}"
+                )
                 raise e
         else:
             logger.info(
@@ -323,19 +320,19 @@ async def serve(
                 nonlocal last_bbox_computed
                 nonlocal policy
 
-                assert (
-                    len(current_qpos) == model_specifics.state_size[0]
-                ), f"State size mismatch: {len(current_qpos)} != {model_specifics.state_size[0]}"
-                assert (
-                    len(images) <= len(model_specifics.video_keys)
-                ), f"Number of images {len(images)} is more than the number of video keys {len(model_specifics.video_keys)}"
+                assert len(current_qpos) == model_specifics.state_size[0], (
+                    f"State size mismatch: {len(current_qpos)} != {model_specifics.state_size[0]}"
+                )
+                assert len(images) <= len(model_specifics.video_keys), (
+                    f"Number of images {len(images)} is more than the number of video keys {len(model_specifics.video_keys)}"
+                )
                 if len(images) > 0:
-                    assert (
-                        len(images[0].shape) == 3
-                    ), f"Image shape is not correct, {images[0].shape} expected (H, W, C)"
-                    assert (
-                        len(images[0].shape) == 3 and images[0].shape[2] == 3
-                    ), f"Image shape is not correct {images[0].shape} expected (H, W, 3)"
+                    assert len(images[0].shape) == 3, (
+                        f"Image shape is not correct, {images[0].shape} expected (H, W, C)"
+                    )
+                    assert len(images[0].shape) == 3 and images[0].shape[2] == 3, (
+                        f"Image shape is not correct {images[0].shape} expected (H, W, 3)"
+                    )
 
                 with torch.no_grad(), torch.autocast(device_type="cuda"):
                     current_qpos = current_qpos.copy()
@@ -619,8 +616,8 @@ async def serve(
 @app.function(
     image=FUNCTION_IMAGE,
     gpu=FUNCTION_GPU_TRAINING,
-    # 10 minutes added for the rest of the code to execute
-    timeout=FUNCTION_TIMEOUT_TRAINING + 10 * MINUTES,
+    # 15 minutes added for the rest of the code to execute
+    timeout=FUNCTION_TIMEOUT_TRAINING + 15 * MINUTES,
     secrets=[
         modal.Secret.from_dict({"MODAL_LOGLEVEL": "DEBUG"}),
         modal.Secret.from_name("supabase"),
@@ -783,7 +780,6 @@ def train(  # All these args should be verified in phosphobot
                     compute_stats(
                         dataset_path,
                         num_workers=int(FUNCTION_CPU_TRAINING),
-                        batch_size=1024,
                     )
                 )
                 STATS_FILE = dataset_path / "meta" / "stats.json"
@@ -840,6 +836,35 @@ def train(  # All these args should be verified in phosphobot
                 logger.debug(f"Uploading {item}")
                 api.upload_file(
                     repo_type="model",
+                    path_or_fileobj=str(item.resolve()),
+                    path_in_repo=item.name,
+                    repo_id=model_name,
+                    token=hf_token,
+                )
+                output_paths.append(item)
+
+        # Upload other checkpoints as well
+        for item in output_dir.glob("checkpoints/*/pretrained_model/*"):
+            if item.is_file():
+                # Will upload all checkpoints under the name checkpoint-{number}/
+                rel_path = item.relative_to(output_dir)
+                number = rel_path.parts[1]
+                if number == "last":
+                    continue
+                checkpoint_number = int(rel_path.parts[1])
+
+                # Create revision if it doesn't exist
+                api.create_branch(
+                    repo_id=model_name,
+                    repo_type="model",
+                    branch=str(checkpoint_number),
+                    token=hf_token,
+                    exist_ok=True,
+                )
+
+                api.upload_file(
+                    repo_type="model",
+                    revision=str(checkpoint_number),
                     path_or_fileobj=str(item.resolve()),
                     path_in_repo=item.name,
                     repo_id=model_name,

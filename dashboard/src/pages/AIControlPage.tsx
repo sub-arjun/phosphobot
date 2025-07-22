@@ -16,6 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Tooltip,
@@ -41,8 +48,9 @@ import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import useSWR from "swr";
 
-type ModelVideoKeys = {
+type ModelConfiguration = {
   video_keys: string[];
+  checkpoints: string[];
 };
 
 export function AIControlPage() {
@@ -52,6 +60,9 @@ export function AIControlPage() {
 
   const [showCassette, setShowCassette] = useState(false);
   const [speed, setSpeed] = useState(1.0);
+  const [selectedCheckpoint, setSelectedCheckpoint] = useState<number | null>(
+    null,
+  );
   const location = useLocation();
   const { session } = useAuth();
   const leaderArmSerialIds = useGlobalStore(
@@ -71,8 +82,8 @@ export function AIControlPage() {
     (state) => state.setSelectedCameraId,
   );
 
-  const { data: modelVideoKeys } = useSWR<ModelVideoKeys>(
-    modelId ? ["/model/video-keys", modelId, selectedModelType] : null,
+  const { data: modelConfiguration } = useSWR<ModelConfiguration>(
+    modelId ? ["/model/configuration", modelId, selectedModelType] : null,
     ([url]) =>
       fetcher(url, "POST", {
         model_id: modelId,
@@ -231,6 +242,7 @@ export function AIControlPage() {
         cameras_keys_mapping: cameraKeysMapping,
         model_type: selectedModelType,
         selected_camera_id: selectedCameraId,
+        checkpoint: selectedCheckpoint,
       });
 
       if (!response) {
@@ -340,7 +352,7 @@ export function AIControlPage() {
   return (
     <div className="container mx-auto py-8 max-w-4xl">
       <Card>
-        <CardContent className="space-y-6 pt-6">
+        <CardContent className="space-y-4 pt-6">
           <div className="flex flex-col gap-y-2">
             <div className="text-xs text-muted-foreground">
               Select model type
@@ -427,6 +439,52 @@ export function AIControlPage() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="checkpoint">Checkpoint to load</Label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="max-w-xs">
+                          Select a specific checkpoint to load, or use the
+                          latest checkpoint.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <Select
+                  value={
+                    selectedCheckpoint !== null
+                      ? selectedCheckpoint.toString()
+                      : "main"
+                  }
+                  onValueChange={(value) => {
+                    if (value === "main") {
+                      setSelectedCheckpoint(null);
+                    } else {
+                      setSelectedCheckpoint(parseInt(value, 10));
+                    }
+                    console.log("Selected checkpoint:", value);
+                  }}
+                  disabled={aiStatus?.status !== "stopped"}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select checkpoint" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {modelConfiguration?.checkpoints?.map((checkpoint) => (
+                      <SelectItem key={checkpoint} value={checkpoint}>
+                        Checkpoint-{checkpoint}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <Accordion
                 type="single"
                 collapsible
@@ -441,7 +499,7 @@ export function AIControlPage() {
                         }}
                       >
                         <TooltipTrigger asChild>
-                          <div className="cursor-pointer flex items-center gap-2 flex-row">
+                          <div className="flex items-center gap-2 flex-row">
                             {showCamera ? (
                               <CameraOff className="mr-1 h-4 w-4" />
                             ) : (
@@ -467,13 +525,15 @@ export function AIControlPage() {
                         selectedCameraId={selectedCameraId}
                       />
                     ) : (
-                      <CameraKeyMapper modelKeys={modelVideoKeys?.video_keys} />
+                      <CameraKeyMapper
+                        modelKeys={modelConfiguration?.video_keys}
+                      />
                     )}
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
 
-              <div className="space-y-2">
+              <div className="space-y-2 mt-2">
                 {selectedModelType == "gr00t" && <Label>Prompt</Label>}
                 {selectedModelType === "ACT_BBOX" && (
                   <Label>Object to detect</Label>
