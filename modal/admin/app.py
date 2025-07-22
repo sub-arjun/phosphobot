@@ -10,7 +10,7 @@ import sentry_sdk
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from loguru import logger
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 import modal
 import supabase
@@ -67,6 +67,8 @@ MINUTES = 60  # seconds
 BASE_TRAININGS_LIMIT = 2
 WHITELISTED_TRAININGS_LIMIT = 8
 PRO_TRAININGS_LIMIT = 8
+# Max allowed time for a server to cold start before we assume it failed
+TIMEOUT_SERVER_NOT_STARTED = 3 * MINUTES
 
 app = modal.App("admin-api")
 
@@ -274,16 +276,22 @@ class StartServerRequest(BaseModel):
 
 
 class ServerInfo(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     server_id: int
     url: str
     port: int
     tcp_socket: tuple[str, int]
     model_id: str
     timeout: int
+    modal_function_call_id: str
 
 
 class SupabaseServersTable(BaseModel):
-    status: Literal["running", "stopped"]
+    model_config = ConfigDict(extra="ignore")
+
+    id: int
+    status: Literal["requested", "running", "stopped", "failed"]
     host: str | None = None
     port: int | None = None
     user_id: str
@@ -291,8 +299,12 @@ class SupabaseServersTable(BaseModel):
     model_type: Literal["gr00t", "ACT", "ACT_BBOX"]
     timeout: int | None = None
     requested_at: Optional[str] = None
+    started_at: Optional[str] = None
     terminated_at: Optional[str] = None
     region: Optional[str] = None
+    tcp_port: Optional[int] = None
+    url: Optional[str] = None
+    modal_function_call_id: Optional[str] = None
 
 
 class ModelInfo(BaseModel):
@@ -515,31 +527,31 @@ def fastapi_app():
         if active_servers.data:
             # Return the existing server info into a ServerInfo object
             # if it's the same model_id
-            row = active_servers.data[0]
+            active_server = SupabaseServersTable.model_validate(active_servers.data[0])
 
-            if row["status"] == "running" and row["region"] is None:
-                # If it has been more than 5 minutes, we can assume there was an error
+            if active_server.status == "running" and active_server.region is None:
+                # If it has been more than TIMEOUT_SERVER_NOT_STARTED minutes, we can assume there was an error
                 # and we can restart the server
                 if (
                     datetime.now(timezone.utc)
-                    - datetime.fromisoformat(row["requested_at"])
-                ).total_seconds() > 5 * MINUTES:
+                    - datetime.fromisoformat(active_server.requested_at)
+                ).total_seconds() > TIMEOUT_SERVER_NOT_STARTED:
                     # Restart the server
                     supabase_client.table("servers").update(
                         {
                             "status": "stopped",
                             "terminated_at": datetime.now(timezone.utc).isoformat(),
                         }
-                    ).eq("id", row["id"]).execute()
+                    ).eq("id", active_server.id).execute()
                     # Kill the modal function
-                    # TODO: we can't do that because the modal_function_call_id is not stored.
-                    # try:
-                    #     modal.FunctionCall.from_id(
-                    #         row["modal_function_call_id"]
-                    #     ).cancel()
-                    # except Exception as e:
-                    #     logger.error(f"Error cancelling modal function: {e}")
-                    #     # We can ignore this error, the server will be restarted anyway
+                    try:
+                        if active_server.modal_function_call_id:
+                            await modal.FunctionCall.from_id(
+                                active_server.modal_function_call_id
+                            ).cancel()
+                    except Exception as e:
+                        logger.error(f"Error cancelling modal function: {e}")
+                        # We can ignore this error, the server will be restarted anyway
 
                     raise HTTPException(
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -553,30 +565,41 @@ def fastapi_app():
             logger.info(
                 f"User {user.user.email} already has an active server for model {request.model_id}"
             )
-            server_info = ServerInfo(
-                server_id=row["id"],
-                url=row["url"],
-                port=row["port"],  # This is the port on which we start ACT
-                tcp_socket=(str(row["host"]), int(row["tcp_port"])),
-                model_id=row["model_id"],
-                timeout=row["timeout"],
-            )
-            return server_info
+            if (
+                active_server.host is not None
+                and active_server.port is not None
+                and active_server.tcp_port is not None
+                and active_server.url is not None
+                and active_server.modal_function_call_id is not None
+                and active_server.timeout is not None
+            ):
+                server_info = ServerInfo(
+                    server_id=active_server.id,
+                    url=active_server.url,
+                    port=active_server.port,
+                    tcp_socket=(active_server.host, active_server.port),
+                    model_id=active_server.model_id,
+                    timeout=active_server.timeout,
+                    modal_function_call_id=active_server.modal_function_call_id,
+                )
+                return server_info
 
-        server_data = SupabaseServersTable(
-            status="running",
-            user_id=user.user.id,
-            model_id=request.model_id,
-            model_type=request.model_type,
-            timeout=request.timeout,
-            region=request.region,
-        )
-        row = (
+        new_server = (
             supabase_client.table("servers")
-            .insert(server_data.model_dump(exclude_unset=True))
+            .insert(
+                {
+                    "status": "requested",
+                    "user_id": user.user_id,
+                    "model_id": request.model_id,
+                    "model_type": request.model_type,
+                    "timeout": request.timeout,
+                    "region": request.region,
+                    "requested_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
             .execute()
         )
-        server_id = row.data[0]["id"]
+        server_id = new_server.data[0]["id"]
 
         # Determine region from IP if not specified
         if request.region is None:
@@ -604,7 +627,7 @@ def fastapi_app():
             # Get the function to serve from the zone to function mapping
             serve = MODEL_TO_ZONE[request.model_type][request.region]
             # Spawn the serve function with the queue
-            serve.spawn(
+            spawn_response = serve.spawn(
                 model_id=request.model_id,
                 server_id=server_id,
                 timeout=request.timeout,
@@ -616,20 +639,31 @@ def fastapi_app():
                 paligemma_warmup.spawn()
 
             # Get the tunnel information from the queue
-            result = q.get()
+            result: dict | None = q.get()
+            if result is None:
+                logger.error("No tunnel info received from queue")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to start server, no tunnel info received",
+                )
 
-        server_info = ServerInfo.model_validate(result)
+        server_info = ServerInfo(
+            modal_function_call_id=spawn_response.object_id, **result
+        )
 
         try:
-            supabase_data = {
+            update_payload = {
                 "url": server_info.url,
                 "port": server_info.port,
                 "host": server_info.tcp_socket[0],
                 "tcp_port": server_info.tcp_socket[1],
                 "region": request.region,
                 "model_id": request.model_id,
+                "status": "running",
+                "modal_function_call_id": server_info.modal_function_call_id,
+                "started_at": datetime.now(timezone.utc).isoformat(),
             }
-            supabase_client.table("servers").update(supabase_data).eq(
+            supabase_client.table("servers").update(update_payload).eq(
                 "id", server_id
             ).execute()
         except Exception as e:
@@ -639,7 +673,7 @@ def fastapi_app():
                 detail="Error inserting server data into database",
             )
 
-        logger.success(f"Server started: {server_info.model_dump()}")
+        logger.success(f"Server started:\n{server_info.model_dump_json(indent=4)}")
         return server_info
 
     @web_app.post("/train")

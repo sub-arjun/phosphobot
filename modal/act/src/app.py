@@ -554,29 +554,7 @@ async def serve(
             finally:
                 logger.info("Shutting down FastAPI server")
                 await inference_fastapi_server.shutdown()
-        except Exception as e:
-            logger.error(f"Error during server setup: {e}")
-            # Update the server status in the database
-            try:
-                update_date = {
-                    "status": "failed",
-                    "terminated_at": datetime.now(timezone.utc).isoformat(),
-                }
-                supabase_client.table("servers").update(update_date).eq(
-                    "id", server_id
-                ).execute()
-                logger.info(f"Updated server info in database: {update_date}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Server setup failed: {e}",
-                )
-            except Exception as e:
-                logger.error(f"Failed to update server info in database: {e}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Server setup failed: {e}",
-                )
-        finally:
+
             try:
                 # Update the server status in the database
                 update_date_servers = {
@@ -601,6 +579,28 @@ async def serve(
                 )
             except Exception as e:
                 logger.error(f"Failed to update server info in database: {e}")
+        except Exception as e:
+            logger.error(f"Error during server setup: {e}")
+            # Update the server status in the database
+            try:
+                update_date = {
+                    "status": "failed",
+                    "terminated_at": datetime.now(timezone.utc).isoformat(),
+                }
+                supabase_client.table("servers").update(update_date).eq(
+                    "id", server_id
+                ).execute()
+                logger.info(f"Updated server info in database: {update_date}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Server setup failed: {e}",
+                )
+            except Exception as e:
+                logger.error(f"Failed to update server info in database: {e}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Server setup failed: {e}",
+                )
 
 
 @app.function(

@@ -198,7 +198,6 @@ def serve(
                 server_thread.join(timeout=5)
             else:
                 logger.info("Server exited before timeout")
-        finally:
             try:
                 # Update the server status in the database
                 update_data_servers = {
@@ -233,6 +232,21 @@ def serve(
                 shutil.copytree(local_model_path, f"/data/models/{model_id}")
                 gr00t_volume.commit()
                 logger.info(f"Model {model_id} pushed to Modal volume")
+
+        except Exception as e:
+            logger.error(f"Failed to start server: {e}")
+            try:
+                # Update the server status in the database
+                update_data_servers = {
+                    "status": "failed",
+                    "terminated_at": datetime.now(timezone.utc).isoformat(),
+                }
+                supabase_client.table("servers").update(update_data_servers).eq(
+                    "id", server_id
+                ).execute()
+                logger.info(f"Updated server info in database: {update_data_servers}")
+            except Exception as e:
+                logger.error(f"Failed to update server info in database: {e}")
 
 
 @app.function(
