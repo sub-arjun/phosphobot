@@ -1227,7 +1227,7 @@ async def stop_auto_control(
     tokens = get_tokens()
 
     # Call the /stop endpoint in Modal
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=5) as client:
         await client.post(
             url=f"{tokens.MODAL_API_URL}/stop",
             headers={
