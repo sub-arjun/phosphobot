@@ -90,30 +90,12 @@ paligemma_detect = modal.Function.from_name("paligemma-detector", "detect_object
 
 def find_model_path(model_id: str, checkpoint: int | None = None) -> str | None:
     model_path = Path(f"/data/{model_id}")
-    # Find the latest timestamp folder
-    if model_path.exists():
-        # Get the latest timestamp folder
-        latest_timestamp = max(
-            [
-                d
-                for d in os.listdir(model_path)
-                if os.path.isdir(os.path.join(model_path, d))
-            ],
-        )
-    else:
-        return None
-    if latest_timestamp is None:
-        return None
     if checkpoint is not None:
         # format the checkpoint to be 6 digits long
-        model_path = (
-            model_path / latest_timestamp / "checkpoints" / str(checkpoint) / "pretrained_model"
-        )
+        model_path = model_path / "checkpoints" / str(checkpoint) / "pretrained_model"
         if model_path.exists():
             return str(model_path.resolve())
-    model_path = (
-        model_path / latest_timestamp / "checkpoints" / "last" / "pretrained_model"
-    )
+    model_path = model_path / "checkpoints" / "last" / "pretrained_model"
     if not os.path.exists(model_path):
         return None
     return str(model_path.resolve())
@@ -271,13 +253,12 @@ async def serve(
                 f"🤗 Model {model_id} not found in Modal volume. Will be downloaded from HuggingFace."
             )
             try:
-                current_timestamp = str(datetime.now(timezone.utc).timestamp())
                 if checkpoint:
                     model_path = snapshot_download(
                         repo_id=model_id,
                         repo_type="model",
                         revision=str(checkpoint),
-                        local_dir=f"/data/{model_id}/{current_timestamp}/checkpoints/{checkpoint}/pretrained_model",
+                        local_dir=f"/data/{model_id}/checkpoints/{checkpoint}/pretrained_model",
                         token=os.getenv("HF_TOKEN"),
                     )
                 else:
@@ -285,11 +266,13 @@ async def serve(
                         repo_id=model_id,
                         repo_type="model",
                         revision="main",
-                        local_dir=f"/data/{model_id}/{current_timestamp}/checkpoints/last/pretrained_model",
+                        local_dir=f"/data/{model_id}/checkpoints/last/pretrained_model",
                         ignore_patterns=["checkpoint-*"],
                     )
             except Exception as e:
-                logger.error(f"Failed to download model {model_id} with checkpoint {checkpoint}: {e}")
+                logger.error(
+                    f"Failed to download model {model_id} with checkpoint {checkpoint}: {e}"
+                )
                 raise e
         else:
             logger.info(
