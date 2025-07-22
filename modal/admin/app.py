@@ -503,17 +503,20 @@ def fastapi_app():
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        active_servers = (
+        # Build the query for active servers
+        query = (
             supabase_client.table("servers")
             .select("*")
             .eq("user_id", user.user.id)
             .eq("status", "running")
-            .eq("checkpoint", request.checkpoint)
             .eq("model_id", request.model_id)
             .is_("terminated_at", "null")
-            .limit(1)
-            .execute()
         )
+        if request.checkpoint is None:
+            query = query.is_("checkpoint", "null")
+        else:
+            query = query.eq("checkpoint", request.checkpoint)
+        active_servers = query.limit(1).execute()
 
         if active_servers.data:
             # Return the existing server info into a ServerInfo object
