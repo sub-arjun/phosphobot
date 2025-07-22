@@ -88,7 +88,7 @@ class Predictor:
         batch_size: int | None = None,
         epochs: int = 20,
         learning_rate: float = 0.0002,
-        save_steps: int = 10_000,
+        save_steps: int = 20_000,
         validation_dataset_name: str | None = None,
     ):
         """Run a single prediction on the model"""
