@@ -161,6 +161,12 @@ def detect_camera_type(
     if cap.isOpened():
         width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
         height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        if width == 0 or height == 0:
+            logger.warning(
+                f"Camera {index} has invalid resolution: {width}x{height}. Assuming classic camera."
+            )
+            cap.release()
+            return "classic"
         ratio = width / height
         if ratio >= 8 / 3:
             cap.release()
