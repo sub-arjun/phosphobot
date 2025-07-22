@@ -152,12 +152,13 @@ export function AIControlPage() {
               console.log("New status : ", newStatus);
               return;
             }
-
-            console.log("AI control status updated:", newStatus);
-            mutateAIStatus({
-              ...aiStatus,
-              status: newStatus,
-            });
+            if (newStatus !== aiStatus.status) {
+              console.log("AI control status updated:", newStatus);
+              mutateAIStatus({
+                ...aiStatus,
+                status: newStatus,
+              });
+            }
           }
         },
       )
