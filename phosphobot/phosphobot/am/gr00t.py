@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Callable, Dict, Literal, Tuple
+from typing import Any, Callable, Dict, Literal, Optional, Tuple
 
 import cv2
 import zmq
@@ -31,6 +31,7 @@ from phosphobot.am.base import (
 from phosphobot.camera import AllCameras
 from phosphobot.control_signal import AIControlSignal
 from phosphobot.hardware.base import BaseManipulator
+from phosphobot.models import ModelConfigurationResponse
 from phosphobot.utils import background_task_log_exceptions, get_hf_token
 
 # Code from: https://github.com/NVIDIA/Isaac-GR00T/blob/main/gr00t/eval/service.py#L111
@@ -445,13 +446,24 @@ class HuggingFaceModelConfig(BaseModel):
         return data
 
 
+class HuggingFaceAugmentedConfig(HuggingFaceModelConfig):
+    """
+    This model extends HuggingFaceModelConfig to include additional fields
+    for augmented models, such as available checkpoints.
+    """
+
+    checkpoints: list[str] = Field(
+        default_factory=list, description="List of available checkpoints for the model."
+    )
+
+
 class Gr00tSpawnConfig(BaseModel):
     video_keys: list[str]
     state_keys: list[str]
     action_keys: list[str]
     embodiment_tag: str
     unit: Literal["degrees", "rad"]
-    hf_model_config: HuggingFaceModelConfig
+    hf_model_config: HuggingFaceAugmentedConfig
 
     # not good enough
     # class Config:
@@ -530,7 +542,7 @@ class Gr00tN1(ActionModel):
         return concatenated_actions
 
     @classmethod
-    def fetch_config(cls, model_id: str) -> HuggingFaceModelConfig:
+    def fetch_config(cls, model_id: str) -> HuggingFaceAugmentedConfig:
         """
         Fetch the model config from Hugging Face Hub.
         If the model is not found on Hugging Face Hub, it will be loaded from the given path.
@@ -552,6 +564,16 @@ class Gr00tN1(ActionModel):
                 config_content = f.read()
             # Parse the file
             hf_model_config = HuggingFaceModelConfig.model_validate_json(config_content)
+            # Fetch the available revisions
+            branches = []
+            refs = api.list_repo_refs(model_id)
+            for branch in refs.branches:
+                branches.append(branch.name)
+
+            hf_augmented_config = HuggingFaceAugmentedConfig(
+                **hf_model_config.model_dump(), checkpoints=branches
+            )
+
         except Exception as e:
             logger.info(
                 f"Couldn't load model {model_id} from Hugging Face Hub. Trying from local path."
@@ -566,8 +588,11 @@ class Gr00tN1(ActionModel):
                 config_content = f.read()
             # Parse the file
             hf_model_config = HuggingFaceModelConfig.model_validate_json(config_content)
+            hf_augmented_config = HuggingFaceAugmentedConfig(
+                **hf_model_config.model_dump(), checkpoints=["main"]
+            )
 
-        return hf_model_config
+        return hf_augmented_config
 
     @classmethod
     def fetch_spawn_config(cls, model_id: str) -> Gr00tSpawnConfig:
@@ -600,7 +625,7 @@ class Gr00tN1(ActionModel):
         )
 
     @classmethod
-    def fetch_and_get_video_keys(cls, model_id: str) -> list[str]:
+    def fetch_and_get_configuration(cls, model_id: str) -> ModelConfigurationResponse:
         """
         Fetch the model config and get the video keys.
         """
@@ -608,7 +633,10 @@ class Gr00tN1(ActionModel):
         video_keys = [
             "video." + key for key in hf_model_config.embodiment.modalities.video.keys()
         ]
-        return video_keys
+        return ModelConfigurationResponse(
+            video_keys=video_keys,
+            checkpoints=hf_model_config.checkpoints,
+        )
 
     @classmethod
     def fetch_and_verify_config(
@@ -1309,7 +1337,9 @@ class Gr00tTrainer(BaseTrainer):
                         if sub_item.is_file():
                             logger.info(f"Uploading file: {sub_item}")
                             # if the name starts with tmp/ we skip it
-                            if sub_item.name.startswith("tmp/") or sub_item.name.startswith("/tmp/"):
+                            if sub_item.name.startswith(
+                                "tmp/"
+                            ) or sub_item.name.startswith("/tmp/"):
                                 continue
                             # Parse the checkpoint number as an int
                             try:

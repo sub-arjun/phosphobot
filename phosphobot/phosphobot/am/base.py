@@ -11,7 +11,7 @@ from huggingface_hub import HfApi
 from loguru import logger
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from phosphobot.models import InfoModel
+from phosphobot.models import InfoModel, ModelConfigurationResponse
 
 # Disable PyAV logs
 av.logging.set_level(None)
@@ -35,13 +35,14 @@ class ActionModel(ABC):
         self.server_port = server_port
 
     @classmethod
-    def fetch_and_get_video_keys(cls, model_id: str) -> list[str]:
+    def fetch_and_get_configuration(cls, model_id: str) -> ModelConfigurationResponse:
         """
-        Fetch the model from Hugging Face and get the video keys.
+        Fetch the model from Hugging Face and get the configuration.
         Args:
             model_id (str): Model ID on Hugging Face.
         Returns:
-            list[str]: List of video keys.
+            video_keys, list[str]: List of configuration keys.
+            checkpoints, list[str]: List of available checkpoints.
         """
         raise NotImplementedError(
             f"This method is not implemented in {cls.__name__}. You need to implement it in your subclass."

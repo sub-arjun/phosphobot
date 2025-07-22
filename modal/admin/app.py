@@ -294,6 +294,7 @@ class SupabaseServersTable(BaseModel):
     requested_at: Optional[str] = None
     terminated_at: Optional[str] = None
     region: Optional[str] = None
+    checkpoint: Optional[int] = None
 
 
 class ModelInfo(BaseModel):
@@ -572,6 +573,7 @@ def fastapi_app():
             model_type=request.model_type,
             timeout=request.timeout,
             region=request.region,
+            checkpoint=request.checkpoint,
         )
         row = (
             supabase_client.table("servers")

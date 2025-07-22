@@ -30,8 +30,8 @@ from phosphobot.models import (
     InfoResponse,
     MergeDatasetsRequest,
     ItemInfo,
-    ModelVideoKeysRequest,
-    ModelVideoKeysResponse,
+    ModelConfigurationRequest,
+    ModelConfigurationResponse,
     StatusResponse,
     TrainingInfoRequest,
     TrainingInfoResponse,
@@ -688,12 +688,12 @@ async def download_folder(folder_path: str):
     )
 
 
-@router.post("/model/video-keys", response_model=ModelVideoKeysResponse)
-async def get_model_video_keys(
-    request: ModelVideoKeysRequest,
-) -> ModelVideoKeysResponse:
+@router.post("/model/configuration", response_model=ModelConfigurationResponse)
+async def get_model_configuration(
+    request: ModelConfigurationRequest,
+) -> ModelConfigurationResponse:
     """
-    Fetch the model info from Hugging Face and return the video keys.
+    Fetch the model info from Hugging Face and return its configuration.
     """
     request.model_id = request.model_id.strip()
 
@@ -712,12 +712,14 @@ async def get_model_video_keys(
         )
 
     try:
-        video_keys = model_class.fetch_and_get_video_keys(model_id=request.model_id)
-        return ModelVideoKeysResponse(video_keys=video_keys)
+        config = model_class.fetch_and_get_configuration(model_id=request.model_id)
+        return ModelConfigurationResponse(
+            video_keys=config.video_keys, checkpoints=config.checkpoints
+        )
 
     except Exception as e:
         logger.warning(f"No video keys found for {request.model_id}: {e}")
-        return ModelVideoKeysResponse(video_keys=[])
+        return ModelConfigurationResponse(video_keys=[], checkpoints=[])
 
 
 @router.post("/training/info", response_model=TrainingInfoResponse)

@@ -16,6 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Tooltip,
@@ -30,7 +37,6 @@ import type { AIStatusResponse, ServerStatus, TrainingConfig } from "@/types";
 import {
   CameraIcon,
   CameraOff,
-  Cog,
   ExternalLink,
   HelpCircle,
   Pause,
@@ -42,8 +48,9 @@ import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import useSWR from "swr";
 
-type ModelVideoKeys = {
+type ModelConfiguration = {
   video_keys: string[];
+  checkpoints: string[];
 };
 
 export function AIControlPage() {
@@ -52,7 +59,6 @@ export function AIControlPage() {
   const setModelId = useGlobalStore((state) => state.setModelId);
 
   const [showCassette, setShowCassette] = useState(false);
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [speed, setSpeed] = useState(1.0);
   const [selectedCheckpoint, setSelectedCheckpoint] = useState<number | null>(
     null,
@@ -76,8 +82,8 @@ export function AIControlPage() {
     (state) => state.setSelectedCameraId,
   );
 
-  const { data: modelVideoKeys } = useSWR<ModelVideoKeys>(
-    modelId ? ["/model/video-keys", modelId, selectedModelType] : null,
+  const { data: modelConfiguration } = useSWR<ModelConfiguration>(
+    modelId ? ["/model/configuration", modelId, selectedModelType] : null,
     ([url]) =>
       fetcher(url, "POST", {
         model_id: modelId,
@@ -432,6 +438,52 @@ export function AIControlPage() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="checkpoint">Checkpoint to load</Label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="max-w-xs">
+                          Select a specific checkpoint to load, or use the
+                          latest checkpoint.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <Select
+                  value={
+                    selectedCheckpoint !== null
+                      ? selectedCheckpoint.toString()
+                      : "main"
+                  }
+                  onValueChange={(value) => {
+                    if (value === "main") {
+                      setSelectedCheckpoint(null);
+                    } else {
+                      setSelectedCheckpoint(parseInt(value, 10));
+                    }
+                    console.log("Selected checkpoint:", value);
+                  }}
+                  disabled={aiStatus?.status !== "stopped"}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select checkpoint" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {modelConfiguration?.checkpoints?.map((checkpoint) => (
+                      <SelectItem key={checkpoint} value={checkpoint}>
+                        Checkpoint-{checkpoint}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <Accordion
                 type="single"
                 collapsible
@@ -472,85 +524,10 @@ export function AIControlPage() {
                         selectedCameraId={selectedCameraId}
                       />
                     ) : (
-                      <CameraKeyMapper modelKeys={modelVideoKeys?.video_keys} />
-                    )}
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-
-              <Accordion
-                type="single"
-                collapsible
-                value={showAdvancedOptions ? "advanced-options" : ""}
-              >
-                <AccordionItem value="advanced-options">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <AccordionTrigger
-                        onClick={() => {
-                          setShowAdvancedOptions(!showAdvancedOptions);
-                        }}
-                      >
-                        <TooltipTrigger asChild>
-                          <div className="flex items-center gap-2 flex-row">
-                            <Cog className="mr-1 h-4 w-4" />
-                            {showAdvancedOptions
-                              ? "Hide advanced options"
-                              : "Show advanced options"}
-                          </div>
-                        </TooltipTrigger>
-                      </AccordionTrigger>
-                      <TooltipContent>
-                        <p className="max-w-xs">
-                          Configure advanced model settings.
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <AccordionContent>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Label htmlFor="checkpoint">
-                          Checkpoint to load (leave empty to use latest)
-                        </Label>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="max-w-xs">
-                                Specify a checkpoint to load. Leave empty to use
-                                the latest checkpoint.
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                      <Input
-                        id="checkpoint"
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={
-                          selectedCheckpoint !== null ? selectedCheckpoint : ""
-                        }
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === "") {
-                            setSelectedCheckpoint(null);
-                          } else {
-                            const numVal = parseInt(val, 10);
-                            if (!isNaN(numVal) && numVal >= 0) {
-                              setSelectedCheckpoint(numVal);
-                            }
-                          }
-                        }}
-                        placeholder="e.g. 500 (optional)"
-                        className="w-full"
-                        disabled={aiStatus?.status !== "stopped"}
+                      <CameraKeyMapper
+                        modelKeys={modelConfiguration?.video_keys}
                       />
-                    </div>
+                    )}
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
