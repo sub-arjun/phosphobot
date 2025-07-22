@@ -1309,7 +1309,7 @@ class Gr00tTrainer(BaseTrainer):
                         if sub_item.is_file():
                             logger.info(f"Uploading file: {sub_item}")
                             # if the name starts with tmp/ we skip it
-                            if sub_item.name.startswith("tmp/"):
+                            if sub_item.name.startswith("tmp/") or sub_item.name.startswith("/tmp/"):
                                 continue
                             # Parse the checkpoint number as an int
                             try:
