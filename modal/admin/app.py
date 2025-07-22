@@ -529,7 +529,11 @@ def fastapi_app():
             # if it's the same model_id
             active_server = SupabaseServersTable.model_validate(active_servers.data[0])
 
-            if active_server.status == "running" and active_server.region is None:
+            if (
+                active_server.status == "requested"
+                and active_server.requested_at is not None
+                and active_server.region is None
+            ):
                 # If it has been more than TIMEOUT_SERVER_NOT_STARTED minutes, we can assume there was an error
                 # and we can restart the server
                 if (
@@ -539,7 +543,7 @@ def fastapi_app():
                     # Restart the server
                     supabase_client.table("servers").update(
                         {
-                            "status": "stopped",
+                            "status": "failed",
                             "terminated_at": datetime.now(timezone.utc).isoformat(),
                         }
                     ).eq("id", active_server.id).execute()
@@ -589,7 +593,7 @@ def fastapi_app():
             .insert(
                 {
                     "status": "requested",
-                    "user_id": user.user_id,
+                    "user_id": user.user.id,
                     "model_id": request.model_id,
                     "model_type": request.model_type,
                     "timeout": request.timeout,
