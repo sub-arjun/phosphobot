@@ -507,6 +507,7 @@ def fastapi_app():
             .select("*")
             .eq("user_id", user.user.id)
             .eq("status", "running")
+            .eq("checkpoint", request.checkpoint)
             .eq("model_id", request.model_id)
             .is_("terminated_at", "null")
             .limit(1)
