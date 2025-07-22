@@ -402,7 +402,7 @@ Training was successful, try it out on your robot!
 def resize_dataset(
     dataset_root_path: Path,
     resize_to: tuple = (320, 240),
-) -> tuple[bool, bool]:
+) -> tuple[bool, bool, str | None]:
     """
     Resize the dataset to a smaller size for faster training.
 
@@ -412,6 +412,7 @@ def resize_dataset(
     Returns:
         1st bool: True if the processing was successful, False otherwise.
         2nd bool: True if we need to recompute the stats, False otherwise.
+        str: Details if error
     """
     # Start by opening the InfoModel and checking the video sizes
     logger.info(
@@ -440,7 +441,7 @@ def resize_dataset(
 
         if video_information == {}:
             logger.info("No videos need to be resized.")
-            return True, False
+            return True, False, "No videos need to be resize"
 
         for video_folder in video_information:
             if video_information[video_folder]["need_to_resize"]:
@@ -497,11 +498,11 @@ def resize_dataset(
 
         logger.info("Resizing completed.")
         logger.warning("You now need to recompute the stats for the dataset.")
-        return True, True
+        return True, True, "Resizing successful"
 
     except Exception as e:
         logger.error(f"Error resizing videos: {e}")
-        return False, False
+        return False, False, f"Error resizing videos: {e}"
 
 
 class BaseTrainer(ABC):

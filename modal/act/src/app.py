@@ -10,6 +10,7 @@ import numpy as np
 import wandb
 from fastapi import Response
 from huggingface_hub import HfApi, snapshot_download
+from huggingface_hub.errors import HFValidationError
 from loguru import logger
 
 import modal
@@ -320,19 +321,19 @@ async def serve(
                 nonlocal last_bbox_computed
                 nonlocal policy
 
-                assert len(current_qpos) == model_specifics.state_size[0], (
-                    f"State size mismatch: {len(current_qpos)} != {model_specifics.state_size[0]}"
-                )
-                assert len(images) <= len(model_specifics.video_keys), (
-                    f"Number of images {len(images)} is more than the number of video keys {len(model_specifics.video_keys)}"
-                )
+                assert (
+                    len(current_qpos) == model_specifics.state_size[0]
+                ), f"State size mismatch: {len(current_qpos)} != {model_specifics.state_size[0]}"
+                assert (
+                    len(images) <= len(model_specifics.video_keys)
+                ), f"Number of images {len(images)} is more than the number of video keys {len(model_specifics.video_keys)}"
                 if len(images) > 0:
-                    assert len(images[0].shape) == 3, (
-                        f"Image shape is not correct, {images[0].shape} expected (H, W, C)"
-                    )
-                    assert len(images[0].shape) == 3 and images[0].shape[2] == 3, (
-                        f"Image shape is not correct {images[0].shape} expected (H, W, 3)"
-                    )
+                    assert (
+                        len(images[0].shape) == 3
+                    ), f"Image shape is not correct, {images[0].shape} expected (H, W, C)"
+                    assert (
+                        len(images[0].shape) == 3 and images[0].shape[2] == 3
+                    ), f"Image shape is not correct {images[0].shape} expected (H, W, 3)"
 
                 with torch.no_grad(), torch.autocast(device_type="cuda"):
                     current_qpos = current_qpos.copy()
@@ -718,27 +719,27 @@ def train(  # All these args should be verified in phosphobot
             dataset_name = "phospho-app/" + dataset_path.name
 
             logger.info(f"Uploading dataset {dataset_name} to Hugging Face")
-            api = HfApi(token=hf_token)
-            api.create_repo(
+            hf_api = HfApi(token=hf_token)
+            hf_api.create_repo(
                 repo_type="dataset",
                 repo_id=dataset_name,
                 token=hf_token,
                 exist_ok=True,
             )
-            api.upload_folder(
+            hf_api.upload_folder(
                 repo_type="dataset",
                 folder_path=str(dataset_path),
                 repo_id=dataset_name,
                 token=hf_token,
             )
-            api.create_branch(
+            hf_api.create_branch(
                 repo_id=dataset_name,
                 repo_type="dataset",
                 branch="v2.0",
                 token=True,
                 exist_ok=True,
             )
-            api.upload_folder(
+            hf_api.upload_folder(
                 repo_type="dataset",
                 folder_path=str(dataset_path),
                 repo_id=dataset_name,
@@ -761,13 +762,13 @@ def train(  # All these args should be verified in phosphobot
 
         else:
             # Normal ACT: Resize the dataset to 320x240 otherwise there are too many Cuda OOM errors
-            resized_successful, need_to_compute_stats = resize_dataset(
+            resized_successful, need_to_compute_stats, resize_details = resize_dataset(
                 dataset_root_path=dataset_path,
                 resize_to=(320, 240),
             )
             if not resized_successful:
                 raise RuntimeError(
-                    f"Failed to resize dataset {dataset_name} to 320x240, is the dataset in the right format ?"
+                    f"Failed to resize dataset {dataset_name} to 320x240, is the dataset in the right format? Details: {resize_details}"
                 )
             logger.info(
                 f"Resized dataset {dataset_name} to 320x240, need to recompute stats: {need_to_compute_stats}"
@@ -828,13 +829,13 @@ def train(  # All these args should be verified in phosphobot
             raise te
 
         # We now upload the trained model to the HF repo
-        api = HfApi(token=hf_token)
+        hf_api = HfApi(token=hf_token)
         files_directory = output_dir / "checkpoints" / "last" / "pretrained_model"
         output_paths: list[Path] = []
         for item in files_directory.glob("**/*"):
             if item.is_file():
                 logger.debug(f"Uploading {item}")
-                api.upload_file(
+                hf_api.upload_file(
                     repo_type="model",
                     path_or_fileobj=str(item.resolve()),
                     path_in_repo=item.name,
@@ -854,7 +855,7 @@ def train(  # All these args should be verified in phosphobot
                 checkpoint_number = int(rel_path.parts[1])
 
                 # Create revision if it doesn't exist
-                api.create_branch(
+                hf_api.create_branch(
                     repo_id=model_name,
                     repo_type="model",
                     branch=str(checkpoint_number),
@@ -862,7 +863,7 @@ def train(  # All these args should be verified in phosphobot
                     exist_ok=True,
                 )
 
-                api.upload_file(
+                hf_api.upload_file(
                     repo_type="model",
                     revision=str(checkpoint_number),
                     path_or_fileobj=str(item.resolve()),
@@ -883,7 +884,7 @@ def train(  # All these args should be verified in phosphobot
             batch_size=training_params.batch_size,
             return_readme_as_bytes=True,
         )
-        api.upload_file(
+        hf_api.upload_file(
             repo_type="model",
             path_or_fileobj=readme,
             path_in_repo="README.md",
@@ -903,14 +904,17 @@ def train(  # All these args should be verified in phosphobot
                 "terminated_at": terminated_at,
             }
         ).eq("id", training_id).execute()
-    except Exception as e:
-        logger.error(f"🚨 Training {training_id} for {dataset_name} failed: {e}")
-        terminated_at = datetime.now(timezone.utc).isoformat()
 
+    except HFValidationError as e:
+        logger.warning(
+            f"HFValidationError during training {training_id} for {dataset_name}: {e}"
+        )
+        # Update the training status in Supabase
         supabase_client.table("trainings").update(
             {
                 "status": "failed",
-                "terminated_at": terminated_at,
+                "terminated_at": datetime.now(timezone.utc).isoformat(),
+                "error_message": str(e),
             }
         ).eq("id", training_id).execute()
 
@@ -925,9 +929,38 @@ def train(  # All these args should be verified in phosphobot
             error_traceback=str(e),
             return_readme_as_bytes=True,
         )
-        api = HfApi(token=hf_token)
+        hf_api = HfApi(token=hf_token)
+        hf_api.upload_file(
+            repo_type="model",
+            path_or_fileobj=readme,
+            path_in_repo="README.md",
+            repo_id=model_name,
+            token=hf_token,
+        )
 
-        api.upload_file(
+    except Exception as e:
+        logger.error(f"🚨 ACT Training {training_id} for {dataset_name} failed: {e}")
+
+        supabase_client.table("trainings").update(
+            {
+                "status": "failed",
+                "terminated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ).eq("id", training_id).execute()
+
+        readme = generate_readme(
+            model_type="act",
+            dataset_repo_id=dataset_name,
+            folder_path=output_dir,
+            wandb_run_url=wandb_run_url,
+            steps=training_params.steps,
+            epochs=None,
+            batch_size=training_params.batch_size,
+            error_traceback=str(e),
+            return_readme_as_bytes=True,
+        )
+        hf_api = HfApi(token=hf_token)
+        hf_api.upload_file(
             repo_type="model",
             path_or_fileobj=readme,
             path_in_repo="README.md",

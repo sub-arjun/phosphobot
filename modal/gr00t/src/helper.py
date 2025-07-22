@@ -115,8 +115,8 @@ class Predictor:
 
             # Download info.json file and determine appropriate batch size
             if batch_size is None:
-                api = HfApi(token=hf_token)
-                info_file_path = api.hf_hub_download(
+                hf_api = HfApi(token=hf_token)
+                info_file_path = hf_api.hf_hub_download(
                     repo_id=dataset_repo_id,
                     repo_type="dataset",
                     filename="meta/info.json",
@@ -203,8 +203,8 @@ class Predictor:
                 epochs=epochs,
                 return_readme_as_bytes=True,
             )
-            api = HfApi(token=hf_token)
-            api.upload_file(
+            hf_api = HfApi(token=hf_token)
+            hf_api.upload_file(
                 repo_type="model",
                 path_or_fileobj=readme,
                 path_in_repo="README.md",

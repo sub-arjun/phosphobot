@@ -2,16 +2,15 @@ import os
 import threading
 from pathlib import Path
 
-from fastapi import HTTPException
 import sentry_sdk
+from fastapi import HTTPException
 from huggingface_hub import HfApi
+from huggingface_hub.errors import HFValidationError
 from loguru import logger
 
 import modal
-
 from phosphobot.am.base import TrainingParamsGr00T
 from phosphobot.am.gr00t import Gr00tSpawnConfig
-
 
 if os.getenv("MODAL_ENVIRONMENT") == "production":
     sentry_sdk.init(
@@ -457,7 +456,7 @@ def _upload_partial_checkpoint_gr00t(
     to the Hugging Face Hub model repo. Fails safely if no checkpoints
     are found or an upload error occurs.
     """
-    api = HfApi(token=hf_token)
+    hf_api = HfApi(token=hf_token)
     od = Path(output_dir)
 
     # Find checkpoint-* directories
@@ -492,7 +491,7 @@ def _upload_partial_checkpoint_gr00t(
         rel_path = file.relative_to(od)
         try:
             logger.debug(f"→ uploading {file} as {rel_path}")
-            api.upload_file(
+            hf_api.upload_file(
                 repo_id=hf_model_name,
                 repo_type="model",
                 path_or_fileobj=str(file),
@@ -582,14 +581,26 @@ def train(  # All these args should be verified in phosphobot
         )
         _upload_partial_checkpoint_gr00t(model_name, hf_token)
         raise e
-
-    except Exception as e:
-        logger.error(f"🚨 Training {training_id} for {dataset_name} failed: {e}")
-        terminated_at = datetime.now(timezone.utc).isoformat()
-
+    except HFValidationError as e:
+        logger.warning(f"Validation error during training: {e}")
         # Update the training status in Supabase
         supabase_client.table("trainings").update(
-            {"status": "failed", "terminated_at": terminated_at}
+            {
+                "status": "failed",
+                "terminated_at": datetime.now(timezone.utc).isoformat(),
+            }
         ).eq("id", training_id).execute()
-
+        raise HTTPException(
+            status_code=400,
+            detail=f"HuggingFace validation error: {e}",
+        )
+    except Exception as e:
+        logger.error(f"🚨 Gr00t training {training_id} for {dataset_name} failed: {e}")
+        # Update the training status in Supabase
+        supabase_client.table("trainings").update(
+            {
+                "status": "failed",
+                "terminated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ).eq("id", training_id).execute()
         raise e
