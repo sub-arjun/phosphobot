@@ -4,6 +4,7 @@ import json
 from copy import copy
 from typing import Literal, cast
 
+import httpx
 import json_numpy  # type: ignore
 import numpy as np
 from dateutil import parser  # type: ignore
@@ -64,7 +65,8 @@ from phosphobot.teleoperation import (
     get_teleop_manager,
     get_udp_server,
 )
-from phosphobot.utils import background_task_log_exceptions
+from phosphobot.utils import background_task_log_exceptions, get_tokens
+
 
 # This is used to send numpy arrays as JSON to OpenVLA server
 json_numpy.patch()
@@ -1212,6 +1214,7 @@ async def start_auto_control(
 )
 async def stop_auto_control(
     rcm: RobotConnectionManager = Depends(get_rcm),
+    session=Depends(user_is_logged_in),
 ) -> StatusResponse:
     """
     Stop the auto control by AI
@@ -1220,7 +1223,19 @@ async def stop_auto_control(
         return StatusResponse(message="Auto control is not running")
 
     ai_control_signal.stop()
-    return StatusResponse(message="Stopping auto control")
+
+    tokens = get_tokens()
+
+    # Call the /stop endpoint in Modal
+    async with httpx.AsyncClient(timeout=120) as client:
+        await client.post(
+            url=f"{tokens.MODAL_API_URL}/stop",
+            headers={
+                "Authorization": f"Bearer {session.access_token}",
+                "Content-Type": "application/json",
+            },
+        )
+    return StatusResponse(message="Stopped AI control")
 
 
 @router.post(
@@ -1239,7 +1254,7 @@ async def pause_auto_control(
         return StatusResponse(message="Auto control is not running")
 
     ai_control_signal.status = "paused"
-    return StatusResponse(message="Pausing auto control")
+    return StatusResponse(message="Pausing AI control")
 
 
 @router.post(
@@ -1255,10 +1270,10 @@ async def resume_auto_control(
     Resume the auto control by AI
     """
     if ai_control_signal.status == "running":
-        return StatusResponse(message="Auto control is already running")
+        return StatusResponse(message="AI control is already running")
 
     ai_control_signal.status = "running"
-    return StatusResponse(message="Resuming auto control")
+    return StatusResponse(message="Resuming AI control")
 
 
 @router.post(
@@ -1277,11 +1292,7 @@ async def feedback_auto_control(
 
     await (
         supabase_client.table("ai_control_sessions")
-        .update(
-            {
-                "feedback": request.feedback,
-            }
-        )
+        .update({"feedback": request.feedback})
         .eq("id", request.ai_control_id)
         .execute()
     )
