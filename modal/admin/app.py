@@ -676,6 +676,68 @@ def fastapi_app():
         logger.success(f"Server started:\n{server_info.model_dump_json(indent=4)}")
         return server_info
 
+    @web_app.post("/stop")
+    async def stop_inference(
+        token: HTTPAuthorizationCredentials = Depends(auth_scheme),
+    ):
+        """
+        Stop all the currently running servers for the user
+        """
+        try:
+            user = supabase_client.auth.get_user(jwt=token.credentials)
+            logger.debug(f"User: {user.user.email} ({user.user.id}) cancelling servers")
+        except Exception as e:
+            logger.error(f"Error getting user: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Get all running servers for the user
+        active_servers = (
+            supabase_client.table("servers")
+            .select("*")
+            .eq("user_id", user.user.id)
+            .eq("status", "running")
+            .execute()
+        )
+
+        if not active_servers.data:
+            logger.info("No active servers to cancel")
+            return {"detail": "No active servers to cancel"}
+
+        for server in active_servers.data:
+            server_id = server["id"]
+            try:
+                logger.debug(
+                    f"Cancelling Modal function {server['modal_function_call_id']} for server {server_id}"
+                )
+                modal_function = modal.FunctionCall.from_id(
+                    server["modal_function_call_id"]
+                )
+                modal_function.cancel()
+            except Exception as e:
+                logger.error(f"Error stopping server {server_id}: {e}")
+
+            # Update the server status to "stopped" in the database
+            supabase_client.table("servers").update(
+                {
+                    "status": "stopped",
+                    "terminated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            ).eq("id", server_id).execute()
+            # Update the AI control sessions linked to this server
+            supabase_client.table("ai_control_sessions").update(
+                {"status": "stopped"}
+            ).eq("server_id", server_id).execute()
+            # Update the AI control sessions ended_at if it's not already set
+            supabase_client.table("ai_control_sessions").update(
+                {"ended_at": datetime.now(timezone.utc).isoformat()}
+            ).eq("server_id", server_id).is_("ended_at", None).execute()
+
+        return {"detail": "All active servers cancelled successfully"}
+
     @web_app.post("/train")
     async def start_training(
         request: TrainingRequest,
