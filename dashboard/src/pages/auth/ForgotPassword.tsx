@@ -22,7 +22,7 @@ export function ForgotPassword() {
 
     if (data) {
       toast.success("Password reset email sent! Please check your inbox.");
-      setTimeout(() => navigate("/auth"), 3000);
+      setTimeout(() => navigate("/sign-in"), 3000);
     }
 
     setIsLoading(false);
