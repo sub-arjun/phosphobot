@@ -1190,12 +1190,12 @@ class Gr00tTrainer(BaseTrainer):
         # Check the dataset for null/nan values in action/observation columns
         check_parquet_files(DATASET_PATH / "data" / "chunk-000")
 
-        resized_successful, _ = resize_dataset(
+        resized_successful, _, resize_details = resize_dataset(
             dataset_root_path=DATASET_PATH, resize_to=(224, 224)
         )
         if not resized_successful:
             raise RuntimeError(
-                f"Resizing dataset {self.config.dataset_name} to 224x224 failed: {resized_successful}"
+                f"Resizing dataset {self.config.dataset_name} to 224x224 failed: {resize_details}"
             )
         logger.info(f"Resized dataset {self.config.dataset_name} to 224x224")
 
@@ -1235,12 +1235,12 @@ class Gr00tTrainer(BaseTrainer):
                             f"Failed to download dataset {self.config.training_params.validation_dataset_name} after {max_retries} attempts, is Hugging Face down ? : {e}"
                         )
 
-            resized_successful, _ = resize_dataset(
+            resized_successful, _, resize_details = resize_dataset(
                 dataset_root_path=VAL_DATASET_PATH, resize_to=(224, 224)
             )
             if not resized_successful:
                 raise RuntimeError(
-                    f"Resizing dataset {self.config.training_params.validation_dataset_name} to 224x224 failed: {resized_successful}"
+                    f"Resizing dataset {self.config.training_params.validation_dataset_name} to 224x224 failed: {resize_details}"
                 )
             logger.info(
                 f"Resized dataset {self.config.training_params.validation_dataset_name} to 224x224"
