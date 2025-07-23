@@ -110,55 +110,51 @@ class ParquetEpisodesDataset(TorchDataset):
         videos_folders = os.path.join(self.videos_dir, "chunk-000")
         self.video_keys = os.listdir(videos_folders)  # e.g., ["camera1", "camera2"]
 
-        # Pre-decode and cache all video frames
-        self._initialize_video_cache()
+        # New: Episode info mapping
+        self.episode_info: dict = {}
+        for global_idx, info in self.index_mapping.items():
+            ep_idx = info["episode_idx"]
+            if ep_idx not in self.episode_info:
+                self.episode_info[ep_idx] = {
+                    "file_path": info["file_path"],
+                    "videos_paths": info["videos_paths"],
+                    "timestamps": None,
+                }
 
-    def _initialize_video_cache(self):
-        """Decode all video frames and store them in a cache using parallel processing."""
-        # Map episode_idx to video paths
-        self.episode_to_videos_paths = {}
-        for global_idx in self.index_mapping:
-            episode_idx = self.index_mapping[global_idx]["episode_idx"]
-            if episode_idx not in self.episode_to_videos_paths:
-                self.episode_to_videos_paths[episode_idx] = self.index_mapping[
-                    global_idx
-                ]["videos_paths"]
+        # Per-worker caching state
+        self.current_episode_idx = None
+        self.current_episode_frames = None
+        self.worker_cache: dict = {}
 
-        # Prepare arguments for parallel decoding
-        args_list = [
-            (episode_idx, file_path, self.episode_to_videos_paths[episode_idx])
-            for episode_idx, file_path in enumerate(self.file_paths)
-        ]
+    def _load_episode_frames(self, episode_idx: int) -> Dict[str, torch.Tensor]:
+        """Load and cache frames for a single episode"""
+        # Check worker-specific cache first
+        worker_id = multiprocessing.current_process().pid
+        if worker_id in self.worker_cache:
+            if self.worker_cache[worker_id]["episode_idx"] == episode_idx:
+                return self.worker_cache[worker_id]["frames"]
 
-        # Decode episodes in parallel using 8 CPUs
-        with multiprocessing.Pool(processes=8, maxtasksperchild=10) as pool:
-            results = list(
-                tqdm.tqdm(
-                    pool.imap(self._decode_episode, args_list),
-                    total=len(args_list),
-                    desc="Decoding videos",
-                )
-            )
+        # Load timestamps if not cached
+        if self.episode_info[episode_idx]["timestamps"] is None:
+            df = self.read_parquet(str(self.episode_info[episode_idx]["file_path"]))
+            self.episode_info[episode_idx]["timestamps"] = df["timestamp"].tolist()
 
-        # Populate cache
-        self.cache = {
-            episode_idx: decoded_frames for episode_idx, decoded_frames in results
-        }
-
-    def _decode_episode(
-        self, args: Tuple[int, Path, Dict[str, Path]]
-    ) -> Tuple[int, Dict[str, torch.Tensor]]:
-        """Decode all frames for an episode given its timestamps and video paths."""
-        episode_idx, parquet_file_path, videos_paths = args
-        df = pd.read_parquet(parquet_file_path)
-        timestamps = df["timestamp"].tolist()
+        # Decode frames
         decoded_frames = {}
-        for video_key, video_path in videos_paths.items():
-            frames = decode_video_frames_torchvision(video_path, timestamps)
-            # Store as uint8 to save memory
-            frames = (frames * 255).to(torch.uint8)
-            decoded_frames[video_key] = frames
-        return episode_idx, decoded_frames
+        for video_key, video_path in self.episode_info[episode_idx][
+            "videos_paths"
+        ].items():
+            frames = decode_video_frames_torchvision(
+                video_path, self.episode_info[episode_idx]["timestamps"]
+            )
+            decoded_frames[video_key] = (frames * 255).to(torch.uint8)  # Store as uint8
+
+        # Update worker cache (only keep current episode)
+        self.worker_cache[worker_id] = {
+            "episode_idx": episode_idx,
+            "frames": decoded_frames,
+        }
+        return decoded_frames
 
     def __len__(self) -> int:
         return self.total_length
@@ -193,9 +189,12 @@ class ParquetEpisodesDataset(TorchDataset):
             else:
                 sample[col_name] = torch.tensor([value], dtype=torch.float32)
 
+        # Load frames for this episode
+        frames = self._load_episode_frames(episode_idx)
+
         # Retrieve cached frames
         for video_key in self.video_keys:
-            frame = self.cache[episode_idx][video_key][row_idx]
+            frame = frames[video_key][row_idx]
             # Convert uint8 to float32 and normalize
             sample[video_key] = frame.float() / 255.0
 
@@ -323,7 +322,7 @@ def get_stats_einops_patterns(
 def compute_stats(
     dataset_path: Path,
     batch_size: int = 128,
-    num_workers: int = 2,
+    num_workers: int = 6,
     max_num_samples: Optional[int] = None,
 ) -> dict[str, dict[str, torch.Tensor]]:
     """Compute mean/std and min/max statistics of all data keys in a LeRobotDataset."""
