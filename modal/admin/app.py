@@ -493,6 +493,51 @@ def fastapi_app():
         else:
             return ModelStatusResponse(model_url=model_url, model_status="not-found")
 
+    async def _stop_servers_of_user(user_id: str):
+        """
+        Stop all the currently running servers for the user
+        This is used by the auth middleware to stop servers when the user logs out
+
+        Return: the list of server IDs that were stopped
+        """
+        logger.debug(f"Stopping servers for user {user_id}")
+        active_servers = (
+            supabase_client.table("servers")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("status", "running")
+            .execute()
+        )
+
+        if not active_servers.data:
+            logger.info("No active servers to cancel")
+            return []
+
+        # Update the status of all active servers to "stopped"
+        supabase_client.table("servers").update(
+            {
+                "status": "stopped",
+                "terminated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ).in_("id", [server["id"] for server in active_servers.data]).execute()
+
+        # Cancel the modal function calls for each server
+        for server in active_servers.data:
+            server_id = server["id"]
+            try:
+                logger.debug(
+                    f"Cancelling Modal function {server['modal_function_call_id']} for server {server_id}"
+                )
+                modal_function = modal.FunctionCall.from_id(
+                    server["modal_function_call_id"]
+                )
+                modal_function.cancel()
+            except Exception as e:
+                logger.error(f"Error stopping server {server_id}: {e}")
+
+        # Return the list of server IDs that were stopped
+        return [server["id"] for server in active_servers.data]
+
     @web_app.post("/spawn")
     async def spawn_server_for_model(
         raw_request: Request,
@@ -512,85 +557,8 @@ def fastapi_app():
                 headers={"WWW-Authenticate": "Bearer"},
             )
         logger.debug(f"User: {user.user.email} ({user.user.id}) spawning server")
-
-        # Build the query for active servers
-        query = (
-            supabase_client.table("servers")
-            .select("*")
-            .eq("user_id", user.user.id)
-            .eq("status", "running")
-            .eq("model_id", request.model_id)
-            .is_("terminated_at", "null")
-        )
-        if request.checkpoint is None:
-            query = query.is_("checkpoint", "null")
-        else:
-            query = query.eq("checkpoint", request.checkpoint)
-        active_servers = query.limit(1).execute()
-
-        if active_servers.data:
-            # Return the existing server info into a ServerInfo object
-            # if it's the same model_id
-            active_server = SupabaseServersTable.model_validate(active_servers.data[0])
-
-            if (
-                active_server.status == "requested"
-                and active_server.requested_at is not None
-                and active_server.region is None
-            ):
-                # If it has been more than TIMEOUT_SERVER_NOT_STARTED minutes, we can assume there was an error
-                # and we can restart the server
-                if (
-                    datetime.now(timezone.utc)
-                    - datetime.fromisoformat(active_server.requested_at)
-                ).total_seconds() > TIMEOUT_SERVER_NOT_STARTED:
-                    # Restart the server
-                    supabase_client.table("servers").update(
-                        {
-                            "status": "failed",
-                            "terminated_at": datetime.now(timezone.utc).isoformat(),
-                        }
-                    ).eq("id", active_server.id).execute()
-                    # Kill the modal function
-                    try:
-                        if active_server.modal_function_call_id:
-                            await modal.FunctionCall.from_id(
-                                active_server.modal_function_call_id
-                            ).cancel()
-                    except Exception as e:
-                        logger.error(f"Error cancelling modal function: {e}")
-                        # We can ignore this error, the server will be restarted anyway
-
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail="There has been an error with the server. Please try again and reach out on Discord if it persists.",
-                    )
-
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Server is warming up... please wait and try again",
-                )
-            logger.info(
-                f"User {user.user.email} already has an active server for model {request.model_id}"
-            )
-            if (
-                active_server.host is not None
-                and active_server.port is not None
-                and active_server.tcp_port is not None
-                and active_server.url is not None
-                and active_server.modal_function_call_id is not None
-                and active_server.timeout is not None
-            ):
-                server_info = ServerInfo(
-                    server_id=active_server.id,
-                    url=active_server.url,
-                    port=active_server.port,
-                    tcp_socket=(active_server.host, active_server.port),
-                    model_id=active_server.model_id,
-                    timeout=active_server.timeout,
-                    modal_function_call_id=active_server.modal_function_call_id,
-                )
-                return server_info
+        # Stop any existing servers for the user
+        await _stop_servers_of_user(user_id=user.user.id)
 
         new_server = (
             supabase_client.table("servers")
@@ -702,47 +670,9 @@ def fastapi_app():
             )
         logger.debug(f"User: {user.user.email} ({user.user.id}) cancelling servers")
 
-        # Get all running servers for the user
-        active_servers = (
-            supabase_client.table("servers")
-            .select("*")
-            .eq("user_id", user.user.id)
-            .eq("status", "running")
-            .execute()
-        )
-
-        if not active_servers.data:
-            logger.info("No active servers to cancel")
+        stopped_servers = await _stop_servers_of_user(user_id=user.user.id)
+        if not stopped_servers:
             return {"detail": "No active servers to cancel"}
-
-        for server in active_servers.data:
-            server_id = server["id"]
-            try:
-                logger.debug(
-                    f"Cancelling Modal function {server['modal_function_call_id']} for server {server_id}"
-                )
-                modal_function = modal.FunctionCall.from_id(
-                    server["modal_function_call_id"]
-                )
-                modal_function.cancel()
-            except Exception as e:
-                logger.error(f"Error stopping server {server_id}: {e}")
-
-            # Update the server status to "stopped" in the database
-            supabase_client.table("servers").update(
-                {
-                    "status": "stopped",
-                    "terminated_at": datetime.now(timezone.utc).isoformat(),
-                }
-            ).eq("id", server_id).execute()
-            # Update the AI control sessions linked to this server
-            supabase_client.table("ai_control_sessions").update(
-                {"status": "stopped"}
-            ).eq("server_id", server_id).execute()
-            # Update the AI control sessions ended_at if it's not already set
-            supabase_client.table("ai_control_sessions").update(
-                {"ended_at": datetime.now(timezone.utc).isoformat()}
-            ).eq("server_id", server_id).is_("ended_at", None).execute()
 
         return {"detail": "All active servers cancelled successfully"}
 

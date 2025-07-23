@@ -1077,9 +1077,9 @@ async def spawn_inference_server(
             )
             robots_to_control.remove(robot)
 
-    assert all(isinstance(robot, BaseManipulator) for robot in robots_to_control), (
-        "All robots must be manipulators for AI control"
-    )
+    assert all(
+        isinstance(robot, BaseManipulator) for robot in robots_to_control
+    ), "All robots must be manipulators for AI control"
 
     # Get the modal host and port here
     _, _, server_info = await setup_ai_control(
@@ -1157,9 +1157,9 @@ async def start_auto_control(
             )
             robots_to_control.remove(robot)
 
-    assert all(isinstance(robot, BaseManipulator) for robot in robots_to_control), (
-        "All robots must be manipulators for AI control"
-    )
+    assert all(
+        isinstance(robot, BaseManipulator) for robot in robots_to_control
+    ), "All robots must be manipulators for AI control"
 
     # Get the modal host and port here
     model, model_spawn_config, server_info = await setup_ai_control(
@@ -1215,6 +1215,7 @@ async def start_auto_control(
     description="Stop the auto control by AI.",
 )
 async def stop_auto_control(
+    background_tasks: BackgroundTasks,
     rcm: RobotConnectionManager = Depends(get_rcm),
     session=Depends(user_is_logged_in),
 ) -> StatusResponse:
@@ -1229,14 +1230,18 @@ async def stop_auto_control(
     tokens = get_tokens()
 
     # Call the /stop endpoint in Modal
-    async with httpx.AsyncClient(timeout=5) as client:
-        await client.post(
-            url=f"{tokens.MODAL_API_URL}/stop",
-            headers={
-                "Authorization": f"Bearer {session.access_token}",
-                "Content-Type": "application/json",
-            },
-        )
+    @background_task_log_exceptions
+    async def stop_modal():
+        async with httpx.AsyncClient(timeout=5) as client:
+            await client.post(
+                url=f"{tokens.MODAL_API_URL}/stop",
+                headers={
+                    "Authorization": f"Bearer {session.access_token}",
+                    "Content-Type": "application/json",
+                },
+            )
+
+    background_tasks.add_task(stop_modal)
     return StatusResponse(message="Stopped AI control")
 
 
