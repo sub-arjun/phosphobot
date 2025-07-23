@@ -881,12 +881,6 @@ class StartAIControlRequest(BaseModel):
     )
 
 
-class AIStatusRequest(BaseModel):
-    user_id: str = Field(
-        ..., description="User ID of the user who started the AI control"
-    )
-
-
 class AIStatusResponse(BaseModel):
     """
     Response to the AI status request.

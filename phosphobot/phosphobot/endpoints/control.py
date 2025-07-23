@@ -1,13 +1,11 @@
 import asyncio
-import datetime
 import json
 from copy import copy
-from typing import Literal, cast
+from typing import cast
 
 import httpx
 import json_numpy  # type: ignore
 import numpy as np
-from dateutil import parser  # type: ignore
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -26,7 +24,6 @@ from phosphobot.hardware.base import BaseManipulator
 from phosphobot.leader_follower import RobotPair, leader_follower_loop
 from phosphobot.models import (
     AIControlStatusResponse,
-    AIStatusRequest,
     AIStatusResponse,
     AppControlData,
     CalibrateResponse,
@@ -37,25 +34,25 @@ from phosphobot.models import (
     JointsWriteRequest,
     MoveAbsoluteRequest,
     RelativeEndEffectorPosition,
+    RobotConfigResponse,
     RobotConnectionRequest,
     SpawnStatusResponse,
     StartAIControlRequest,
     StartLeaderArmControlRequest,
     StartServerRequest,
     StatusResponse,
+    TemperatureReadResponse,
+    TemperatureWriteRequest,
     TorqueControlRequest,
     TorqueReadResponse,
     UDPServerInformationResponse,
     VoltageReadResponse,
-    TemperatureReadResponse,
-    TemperatureWriteRequest,
-    RobotConfigResponse,
 )
 from phosphobot.robot import (
+    PiperHardware,
     RemotePhosphobot,
     RobotConnectionManager,
     SO100Hardware,
-    PiperHardware,
     get_rcm,
 )
 from phosphobot.supabase import get_client, user_is_logged_in
@@ -66,7 +63,6 @@ from phosphobot.teleoperation import (
     get_udp_server,
 )
 from phosphobot.utils import background_task_log_exceptions, get_tokens
-
 
 # This is used to send numpy arrays as JSON to OpenVLA server
 json_numpy.patch()
@@ -960,87 +956,10 @@ async def stop_gravity_compensation(
     summary="Get the status of the auto control by AI",
     description="Get the status of the auto control by AI.",
 )
-async def fetch_auto_control_status(request: AIStatusRequest) -> AIStatusResponse:
+async def fetch_auto_control_status() -> AIStatusResponse:
     """
     Fetch the status of the auto control by AI
     """
-    supabase_id: str | None = None
-    supabase_status: Literal["stopped", "running", "paused", "waiting"] | None = None
-
-    supabase_client = await get_client()
-    try:
-        user = await supabase_client.auth.get_user()
-    except Exception as e:
-        logger.warning(f"Failed to loggin: {e}")
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    if user is not None:
-        supabase_response = (
-            await supabase_client.table("ai_control_sessions")
-            .select("*, servers(status)")
-            .eq("user_id", user.user.id)
-            .order("created_at", desc=True)
-            .limit(1)
-            .execute()
-        )
-        if supabase_response.data:
-            supabase_data = supabase_response.data[0]
-            supabase_id = supabase_data["id"]
-            supabase_status = supabase_data["status"]
-            # If server status is stopped, set status to stopped
-            if (
-                supabase_data["servers"] is not None
-                and supabase_data["servers"]["status"] == "stopped"
-            ):
-                # Set the backend status to stopped
-                supabase_status = "stopped"
-                # Update the status in the database
-                await (
-                    supabase_client.table("ai_control_sessions")
-                    .update({"status": supabase_status})
-                    .eq("id", supabase_id)
-                    .execute()
-                )
-            # If ai-control signal is stopped but remote status is running, set the remote status to stopped
-            if ai_control_signal.status == "stopped" and supabase_status == "running":
-                supabase_status = "stopped"
-                # Update the status in the database
-                await (
-                    supabase_client.table("ai_control_sessions")
-                    .update({"status": supabase_status})
-                    .eq("id", supabase_id)
-                    .execute()
-                )
-
-    # Situation 1: There is already a different, running process in backend
-    if (
-        supabase_id is not None
-        and supabase_id != ai_control_signal.id
-        and (
-            supabase_status == "running"
-            or supabase_status == "paused"
-            or supabase_status == "waiting"
-        )
-    ):
-        # if started less than 10 minutes ago, return the backend status
-        created_at = parser.isoparse(supabase_data["created_at"])
-        if (
-            datetime.datetime.now(datetime.timezone.utc) - created_at
-        ).total_seconds() < 600:
-            ai_control_signal.id = supabase_id
-            return AIStatusResponse(id=supabase_id, status=supabase_status)
-
-    # Situation 2: The backend says the process should be waiting or stopped
-    if (
-        supabase_id is not None
-        and supabase_id == ai_control_signal.id
-        and supabase_status == "stopped"
-    ):
-        # Stop the local process
-        ai_control_signal.status = supabase_status
-        return AIStatusResponse(id=supabase_id, status=supabase_status)
-
-    # Situation 3: return the current local status
     return AIStatusResponse(id=ai_control_signal.id, status=ai_control_signal.status)
 
 
@@ -1222,10 +1141,6 @@ async def stop_auto_control(
     """
     Stop the auto control by AI
     """
-    if not ai_control_signal.is_in_loop():
-        return StatusResponse(message="Auto control is not running")
-
-    ai_control_signal.stop()
 
     tokens = get_tokens()
 
@@ -1242,6 +1157,12 @@ async def stop_auto_control(
             )
 
     background_tasks.add_task(stop_modal)
+
+    if not ai_control_signal.is_in_loop():
+        return StatusResponse(message="Auto control is not running")
+
+    ai_control_signal.stop()
+
     return StatusResponse(message="Stopped AI control")
 
 

@@ -3,7 +3,6 @@ import { AutoComplete, type Option } from "@/components/common/autocomplete";
 import CameraKeyMapper from "@/components/common/camera-mapping-selector";
 import CameraSelector from "@/components/common/camera-selector";
 import { SpeedSelect } from "@/components/common/speed-select";
-import supabase from "@/components/common/supabase-db";
 import Feedback from "@/components/custom/Feedback";
 import {
   Accordion,
@@ -30,7 +29,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useAuth } from "@/context/AuthContext";
 import { useGlobalStore } from "@/lib/hooks";
 import { fetchWithBaseUrl, fetcher } from "@/lib/utils";
 import type { AIStatusResponse, ServerStatus, TrainingConfig } from "@/types";
@@ -64,7 +62,6 @@ export function AIControlPage() {
     null,
   );
   const location = useLocation();
-  const { session } = useAuth();
   const leaderArmSerialIds = useGlobalStore(
     (state) => state.leaderArmSerialIds,
   );
@@ -95,20 +92,12 @@ export function AIControlPage() {
     ([endpoint]) => fetcher(endpoint, "POST"),
   );
 
-  supabase.auth.setSession({
-    access_token: session?.access_token || "",
-    refresh_token: session?.refresh_token || "",
-  });
-
   const { data: serverStatus, mutate: mutateServerStatus } =
     useSWR<ServerStatus>(["/status"], fetcher);
   const { data: aiStatus, mutate: mutateAIStatus } = useSWR<AIStatusResponse>(
-    session ? ["/ai-control/status"] : null,
-    ([arg]) =>
-      fetcher(arg, "POST", { user_id: session?.user_id }).then((data) => {
-        console.log("AI status data:", data);
-        return data;
-      }),
+    ["/ai-control/status"],
+    ([arg]) => fetcher(arg, "POST"),
+    { refreshInterval: 1000 },
   );
 
   useEffect(() => {
@@ -130,81 +119,6 @@ export function AIControlPage() {
       toast.warning("No robots are connected. AI control will not work.");
     }
   }, [serverStatus]);
-
-  useEffect(() => {
-    if (aiStatus === undefined) return;
-    if (!aiStatus.id || !session) {
-      if (!session) {
-        toast.error("Please log in to access AI control sessions");
-      }
-      return;
-    }
-
-    console.log("Subscribing to AI control session:", aiStatus.id);
-
-    const subscription = supabase
-      .channel(`ai_control_sessions:${aiStatus.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "ai_control_sessions",
-          filter: `id=eq.${aiStatus.id}`,
-        },
-        (payload) => {
-          if (payload.new && "status" in payload.new) {
-            const newStatus = payload.new.status;
-            if (
-              newStatus === null ||
-              newStatus === "" ||
-              newStatus === undefined
-            ) {
-              console.log("New status : ", newStatus);
-              return;
-            }
-            if (newStatus !== aiStatus.status) {
-              console.log("AI control status updated:", newStatus);
-              mutateAIStatus({
-                ...aiStatus,
-                status: newStatus,
-              });
-            }
-          }
-        },
-      )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          supabase
-            .from("ai_control_sessions")
-            .select("status, user_id")
-            .eq("id", aiStatus.id)
-            .maybeSingle()
-            .then(({ data, error }) => {
-              if (error) {
-                console.error("Error fetching AI control status:", error);
-                mutateAIStatus({
-                  ...aiStatus,
-                  status: "stopped",
-                });
-              } else if (data) {
-                if (data.user_id !== session.user_id) {
-                  toast.error("Access denied: Session belongs to another user");
-                }
-                console.log("AI control status:", data.status);
-                mutateAIStatus({
-                  ...aiStatus,
-                  status: data.status,
-                });
-              }
-            });
-        }
-      });
-
-    return () => {
-      supabase.removeChannel(subscription);
-    };
-  }, [aiStatus?.id, session, aiStatus, mutateAIStatus]);
 
   const startControlByAI = async () => {
     if (
