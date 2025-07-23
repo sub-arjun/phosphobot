@@ -447,13 +447,13 @@ export function AITrainingPage() {
                 </div>
               )}
               <div className="text-xs text-muted-foreground mt-4">
-                Dataset info:
+                Training parameters:
               </div>
               <div className="text-sm text-muted-foreground mt-2">
                 {isDatasetInfoLoading && (
                   <div className="flex flex-row items-center">
                     <Loader2 className="size-4 mr-2 animate-spin" />
-                    Loading dataset info...
+                    Loading training parameters...
                   </div>
                 )}
                 {datasetInfoResponse?.status == "ok" &&
