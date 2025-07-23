@@ -1261,9 +1261,6 @@ class BaseManipulator(BaseRobot):
             logger.warning("Robot configuration is not set. Run the calibration first.")
             return
 
-        logger.warning(
-            f"Reading gripper torque: {gripper_torque}. Thresholds: {self.config.gripping_threshold}, {self.config.non_gripping_threshold}"
-        )
         if gripper_torque >= self.config.gripping_threshold:
             self.is_object_gripped = True
         if gripper_torque <= self.config.non_gripping_threshold:

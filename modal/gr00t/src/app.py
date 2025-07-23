@@ -246,26 +246,7 @@ def serve(
                 f"Server instanciated (not started) after {time_to_load} seconds"
             )
 
-            def run_server():
-                server.run()
-
-            server_thread = threading.Thread(target=run_server)
-            server_thread.start()
-
-            # We need to make sure the server terminates before the timeout
-            # Otherwise we can't update the database
-            server_thread.join(timeout=timeout - time_to_load - 10)
-
-            if server_thread.is_alive():
-                logger.warning(
-                    f"Timeout reached after {timeout} seconds, stopping server..."
-                )
-                server.running = False
-                _update_server_status(supabase_client, server_id, "stopped")
-                # Give it a moment to shut down gracefully
-                server_thread.join(timeout=5)
-            else:
-                logger.info("Server exited before timeout")
+            server.run()
 
             # Push the model to the volume if it is not already there
             if not os.path.exists(f"/data/models/{model_id}"):
@@ -284,6 +265,14 @@ def serve(
                 status_code=500,
                 detail=f"Server error: {e}",
             )
+        finally:
+            # Stop the server and update the status
+            server._kill_server()
+            # Clean up resources
+            if hasattr(server, "context"):
+                server.context.destroy(linger=0)
+            if hasattr(server, "socket"):
+                server.socket.close()
 
 
 @app.function(
