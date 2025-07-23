@@ -5,11 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Loader2, Mail } from "lucide-react";
 import type React from "react";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
-export default function ConfirmCode() {
+function ConfirmCodeContent() {
     const [code, setCode] = useState<string>("");
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const router = useRouter();
@@ -121,5 +121,13 @@ export default function ConfirmCode() {
                 </CardContent>
             </Card>
         </div>
+    );
+}
+
+export default function ConfirmCode() {
+    return (
+        <Suspense>
+            <ConfirmCodeContent />
+        </Suspense>
     );
 }
