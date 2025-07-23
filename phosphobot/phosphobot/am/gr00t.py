@@ -204,6 +204,7 @@ class BaseInferenceClient:
         self, host: str = "localhost", port: int = 5555, timeout_ms: int = 15000
     ):
         self.context = zmq.Context()
+
         self.host = host
         self.port = port
         self.timeout_ms = timeout_ms

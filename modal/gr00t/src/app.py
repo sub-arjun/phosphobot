@@ -146,8 +146,7 @@ def serve(
     # logger.info the region
     logger.success(f"🌎 running in {os.environ['MODAL_REGION']} region")
 
-    # Make server_port unique
-    server_port = 5000 + hash(model_id) % 1000
+    server_port = 5555
 
     with modal.forward(server_port, unencrypted=True) as tunnel:
         logger.info(f"tunnel.tcp_socket = {tunnel.tcp_socket}")
