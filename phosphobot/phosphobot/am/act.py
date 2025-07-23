@@ -439,7 +439,7 @@ class ACT(ActionModel):
         unit: Literal["rad", "degrees"] = "rad"
         config = model_spawn_config.hf_model_config
 
-        db_state_updated = False
+        signal_marked_as_started = False
         actions_queue: deque = deque([])
 
         while control_signal.is_in_loop():
@@ -529,17 +529,15 @@ class ACT(ActionModel):
                 control_signal.stop()
                 break
 
-            if not db_state_updated:
+            if not signal_marked_as_started:
                 control_signal.set_running()
-                db_state_updated = True
-                # Small delay to let the UI update
-                await asyncio.sleep(1)
-
-            # Early stop
-            if not control_signal.is_in_loop():
-                break
+                signal_marked_as_started = True
 
             for action in actions:
+                # Early stop
+                if not control_signal.is_in_loop():
+                    break
+
                 if unit == "rad":
                     if action.max() > 2 * np.pi:
                         logger.warning("Actions are in degrees. Converting to radians.")

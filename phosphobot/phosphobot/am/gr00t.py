@@ -204,6 +204,7 @@ class BaseInferenceClient:
         self, host: str = "localhost", port: int = 5555, timeout_ms: int = 15000
     ):
         self.context = zmq.Context()
+
         self.host = host
         self.port = port
         self.timeout_ms = timeout_ms
@@ -734,8 +735,7 @@ class Gr00tN1(ActionModel):
 
         nb_iter = 0
         config = model_spawn_config.hf_model_config
-
-        db_state_updated = False
+        signal_marked_as_started = False
 
         while control_signal.is_in_loop():
             logger.debug(
@@ -836,17 +836,14 @@ class Gr00tN1(ActionModel):
                 control_signal.stop()
                 break
 
-            if not db_state_updated:
+            if not signal_marked_as_started:
                 control_signal.set_running()
-                db_state_updated = True
-                # Small delay to let the UI update
-                await asyncio.sleep(1)
-
-            # Early stop
-            if not control_signal.is_in_loop():
-                break
+                signal_marked_as_started = True
 
             for action in actions:
+                # Early stop
+                if not control_signal.is_in_loop():
+                    break
                 # Send the new joint position to the robot
                 action_list = action.tolist()
                 for robot_index in range(len(robots)):

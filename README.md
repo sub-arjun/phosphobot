@@ -13,7 +13,7 @@
 ## Overview of phospho
 
 - 🕹️ Control your robots to record datasets in minutes with a keyboard, a gamepad, a leader arm, and more
-- ⚡ Train Action models such as ACT, π0 or gr00t-n1 with one command
+- ⚡ Train Action models such as ACT, π0 or gr00t-n1.5 in one click
 - 🦾 Compatible with the SO-100, SO-101, Unitree Go2, Agilex Piper...
 - 🚪 Dev-friendly API
 - 🤗 Fully compatible with LeRobot and HuggingFace
