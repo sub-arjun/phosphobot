@@ -69,6 +69,7 @@ export async function POST(request: Request) {
       automatic_tax: {enabled: true},
       // Prefill the user email
       customer_email: userEmail,
+      allow_promotion_codes: true,
       // Add metadata to the checkout session
       metadata: {
         supabase_user_id: userId,
