@@ -735,6 +735,7 @@ class Gr00tN1(ActionModel):
 
         nb_iter = 0
         config = model_spawn_config.hf_model_config
+        signal_marked_as_started = False
 
         while control_signal.is_in_loop():
             logger.debug(
@@ -834,6 +835,10 @@ class Gr00tN1(ActionModel):
                 )
                 control_signal.stop()
                 break
+
+            if not signal_marked_as_started:
+                control_signal.set_running()
+                signal_marked_as_started = True
 
             for action in actions:
                 # Early stop

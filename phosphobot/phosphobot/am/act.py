@@ -439,7 +439,7 @@ class ACT(ActionModel):
         unit: Literal["rad", "degrees"] = "rad"
         config = model_spawn_config.hf_model_config
 
-        db_state_updated = False
+        signal_marked_as_started = False
         actions_queue: deque = deque([])
 
         while control_signal.is_in_loop():
@@ -529,11 +529,9 @@ class ACT(ActionModel):
                 control_signal.stop()
                 break
 
-            if not db_state_updated:
+            if not signal_marked_as_started:
                 control_signal.set_running()
-                db_state_updated = True
-                # Small delay to let the UI update
-                await asyncio.sleep(1)
+                signal_marked_as_started = True
 
             for action in actions:
                 # Early stop
