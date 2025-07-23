@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -29,7 +28,6 @@ export function SignUpForm({
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const supabase = createClient();
     setIsLoading(true);
     setError(null);
 
@@ -40,15 +38,19 @@ export function SignUpForm({
     }
 
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-        },
+      // Here, like in the dashboard, we send to a backend route to create the user
+      // The user will get a signup code to verify their email
+      // Make a POST request to the NextJS api route /api/auth/signup
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
       });
-      if (error) throw error;
-      router.push("/auth/sign-up-success");
+      if (!response.ok) {
+        throw new Error("Failed to sign up");
+      }
+      // TODO: Send to page with validation code
+      // /auth/sign-up/confirm?email=USER_EMAIL with the email encoded urlencoded
+      router.push(`/auth/confirm-code?email=${encodeURIComponent(email)}`);
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
