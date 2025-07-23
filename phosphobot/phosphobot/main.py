@@ -275,18 +275,18 @@ def run(
             help="(dev) Enable performance profiling. This generates profile.html."
         ),
     ] = False,
-    no_crash_telemetry: Annotated[
+    crash_telemetry: Annotated[
         bool,
         typer.Option(help="Disable crash reporting."),
-    ] = False,
-    no_usage_telemetry: Annotated[
+    ] = True,
+    usage_telemetry: Annotated[
         bool,
         typer.Option(help="Disable usage analytics."),
-    ] = False,
-    no_telemetry: Annotated[
+    ] = True,
+    telemetry: Annotated[
         bool,
         typer.Option(help="Disable all telemetry (Crash and Usage)."),
-    ] = False,
+    ] = True,
 ):
     """
     🧪 [green]Run the phosphobot dashboard and API server.[/green] Control your robot and record datasets.
@@ -299,12 +299,12 @@ def run(
     config.ENABLE_CAMERAS = cameras
     config.PORT = port
     config.PROFILE = profile
-    config.CRASH_TELEMETRY = not no_crash_telemetry  # Enable crash telemetry by default
-    config.USAGE_TELEMETRY = not no_usage_telemetry  # Enable usage telemetry by default
+    config.CRASH_TELEMETRY = crash_telemetry  # Enable crash telemetry by default
+    config.USAGE_TELEMETRY = usage_telemetry  # Enable usage telemetry by default
     config.ENABLE_CAN = can
     config.MAX_OPENCV_INDEX = max_opencv_index
 
-    if no_telemetry:
+    if not telemetry:
         config.CRASH_TELEMETRY = False
         config.USAGE_TELEMETRY = False
 
