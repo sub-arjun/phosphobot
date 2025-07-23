@@ -532,7 +532,7 @@ def fastapi_app():
                     server["modal_function_call_id"]
                 )
                 # Stop the container
-                modal_function.cancel()
+                modal_function.cancel(terminate_containers=True)
             except Exception as e:
                 logger.error(f"Error stopping server {server_id}: {e}")
 
