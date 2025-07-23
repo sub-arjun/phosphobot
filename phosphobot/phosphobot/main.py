@@ -275,12 +275,18 @@ def run(
             help="(dev) Enable performance profiling. This generates profile.html."
         ),
     ] = False,
-    telemetry: Annotated[
+    crash_telemetry: Annotated[
         bool,
-        typer.Option(
-            help="Enable telemetry. This is used for crash reporting and usage statistics."
-        ),
+        typer.Option(help="Disable crash reporting."),
     ] = True,
+    usage_telemetry: Annotated[
+        bool,
+        typer.Option(help="Disable usage analytics."),
+    ] = True,
+    no_telemetry: Annotated[
+        bool,
+        typer.Option(help="Disable all telemetry (Crash and Usage)."),
+    ] = False,
 ):
     """
     🧪 [green]Run the phosphobot dashboard and API server.[/green] Control your robot and record datasets.
@@ -293,9 +299,14 @@ def run(
     config.ENABLE_CAMERAS = cameras
     config.PORT = port
     config.PROFILE = profile
-    config.TELEMETRY = telemetry
+    config.CRASH_TELEMETRY = crash_telemetry
+    config.USAGE_TELEMETRY = usage_telemetry
     config.ENABLE_CAN = can
     config.MAX_OPENCV_INDEX = max_opencv_index
+
+    if no_telemetry:
+        config.CRASH_TELEMETRY = False
+        config.USAGE_TELEMETRY = False
 
     # Start the FastAPI app using uvicorn with port retry logic
     ports = [port]

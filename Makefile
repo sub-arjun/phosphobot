@@ -10,7 +10,7 @@ all: prod
 # Run the server for prod settings (able to connect to the Meta Quest). If npm is not installed, it will skip the build step.
 prod:
 	cd ./dashboard && (npm i && npm run build && mkdir -p ../phosphobot/resources/dist/ && cp -r ./dist/* ../phosphobot/resources/dist/)
-	cd phosphobot && uv run --python 3.10 phosphobot run --simulation=headless
+	cd phosphobot && uv run --python 3.10 phosphobot run --simulation=headless --no_crash_telemetry
 
 # Same as prod, but with the simulation GUI (useful when adding new robots to test)
 prod_gui:
@@ -32,7 +32,7 @@ prod_info:
 
 # Run localhost server for dev settings
 local:
-	cd ./phosphobot && uv run phosphobot run --simulation=gui --port=8080 --host=127.0.0.1 --no-telemetry
+	cd ./phosphobot && uv run phosphobot run --simulation=gui --port=8080 --host=127.0.0.1 --no_crash_telemetry
 
 # For running integration tests
 test_server:
