@@ -5,7 +5,7 @@ import uuid
 from posthog import Posthog
 
 from phosphobot import __version__
-from phosphobot.telemetry import TELEMETRY
+from phosphobot.configs import config
 from phosphobot.utils import get_home_app_path, get_tokens
 
 
@@ -60,7 +60,7 @@ def get_or_create_unique_id(token_path):
 
 
 # We disable posthog in dev environments
-if not TELEMETRY or is_github_actions():
+if not config.USAGE_TELEMETRY or is_github_actions():
     posthog.disabled = True
 
 session_id = str(uuid.uuid4())
