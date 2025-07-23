@@ -131,8 +131,8 @@ const formatJsonDisplay = (jsonString: string) => {
         {Object.entries(obj).map(([key, value]) => (
           <div key={key} className="mb-1">
             <span className="font-semibold text-green-500">{key}</span>
-            <span className="text-gray-600">: </span>
-            <span className="text-gray-800">
+            <span className="text-muted-foreground">: </span>
+            <span className="text-primary">
               {typeof value === "object"
                 ? JSON.stringify(value, null, 2)
                 : String(value)}
@@ -458,7 +458,7 @@ export function AITrainingPage() {
                 )}
                 {datasetInfoResponse?.status == "ok" &&
                   !isDatasetInfoLoading && (
-                    <div className="bg-gray-100 p-4 rounded-md w-full h-64">
+                    <div className="bg-muted p-4 rounded-lg w-full h-64">
                       <pre className="font-mono text-sm whitespace-pre-wrap">
                         {editableJson ? (
                           <JsonEditor
