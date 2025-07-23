@@ -37,6 +37,7 @@ import {
   CameraOff,
   ExternalLink,
   HelpCircle,
+  LoaderCircle,
   Pause,
   Play,
   Square,
@@ -147,120 +148,81 @@ export function AIControlPage() {
     setShowCassette(true);
     const robot_serials_to_ignore = leaderArmSerialIds ?? null;
 
-    try {
-      const response = await fetchWithBaseUrl("/ai-control/start", "POST", {
-        prompt,
-        model_id: modelId,
-        speed,
-        robot_serials_to_ignore,
-        cameras_keys_mapping: cameraKeysMapping,
-        model_type: selectedModelType,
-        selected_camera_id: selectedCameraId,
-        checkpoint: selectedCheckpoint,
-      });
+    const response = await fetchWithBaseUrl("/ai-control/start", "POST", {
+      prompt,
+      model_id: modelId,
+      speed,
+      robot_serials_to_ignore,
+      cameras_keys_mapping: cameraKeysMapping,
+      model_type: selectedModelType,
+      selected_camera_id: selectedCameraId,
+      checkpoint: selectedCheckpoint,
+    });
 
-      if (!response) {
-        setShowCassette(false);
-        mutateAIStatus({
-          ...aiStatus,
-          status: "stopped",
-        });
-        return;
-      }
+    if (!response) {
+      setShowCassette(false);
+      mutateAIStatus();
+      // Call the /ai-control/stop endpoint to reset the AI control status
+      await fetchWithBaseUrl("/ai-control/stop", "POST");
+      return;
+    }
 
-      if (response.status === "error") {
-        // We receive an error message if the control loop is already running
-        setShowCassette(true);
-        mutateAIStatus({
-          ...aiStatus,
-          id: response.ai_control_signal_id,
-          status: response.ai_control_signal_status,
-        });
-        return;
-      }
-
+    if (response.status === "error") {
+      // We receive an error message if the control loop is already running
+      setShowCassette(true);
       mutateAIStatus({
         ...aiStatus,
         id: response.ai_control_signal_id,
         status: response.ai_control_signal_status,
       });
-      console.log("AI control started successfully with id:", aiStatus?.id);
-      mutateServerStatus();
-      toast.success("Halfway there, we have started a GPU...");
-      setTimeout(() => {
-        toast.success("We are fetching your model, please wait...");
-      }, 5000);
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Network or server error";
-      toast.error(`AI start failed: ${errorMessage}`);
-      console.error("Start AI control error:", error);
-      mutateAIStatus({
-        ...aiStatus,
-        status: "stopped",
-      });
-      setShowCassette(false);
+      return;
     }
+
+    mutateAIStatus({
+      ...aiStatus,
+      id: response.ai_control_signal_id,
+      status: response.ai_control_signal_status,
+    });
+    mutateServerStatus();
   };
 
   const stopControl = async () => {
-    try {
-      const response = await fetchWithBaseUrl("/ai-control/stop", "POST");
+    const data = await fetchWithBaseUrl("/ai-control/stop", "POST");
 
-      if (!response) return;
+    if (!data) return;
 
-      mutateAIStatus({
-        ...aiStatus,
-        status: "stopped",
-      });
-      mutateServerStatus();
-      toast.success("AI control stopped successfully");
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Network or server error";
-      toast.error(`AI stop failed: ${errorMessage}`);
-      console.error("Stop AI control error:", error);
-    }
+    mutateAIStatus({
+      ...aiStatus,
+      status: "stopped",
+    });
+    mutateServerStatus();
+    toast.success("AI control stopped successfully");
   };
 
   const pauseControl = async () => {
-    try {
-      const response = await fetchWithBaseUrl("/ai-control/pause", "POST");
+    const data = await fetchWithBaseUrl("/ai-control/pause", "POST");
 
-      if (!response) return;
+    if (!data) return;
 
-      mutateAIStatus({
-        ...aiStatus,
-        status: "paused",
-      });
-      mutateServerStatus();
-      toast.success("AI control paused successfully");
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Network or server error";
-      toast.error(`AI pause failed: ${errorMessage}`);
-      console.error("Pause AI control error:", error);
-    }
+    mutateAIStatus({
+      ...aiStatus,
+      status: "paused",
+    });
+    mutateServerStatus();
+    toast.success("AI control paused successfully");
   };
 
   const resumeControl = async () => {
-    try {
-      const response = await fetchWithBaseUrl("/ai-control/resume", "POST");
+    const data = await fetchWithBaseUrl("/ai-control/resume", "POST");
 
-      if (!response) return;
+    if (!data) return;
 
-      mutateAIStatus({
-        ...aiStatus,
-        status: "running",
-      });
-      mutateServerStatus();
-      toast.success("AI control resumed successfully");
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Network or server error";
-      toast.error(`AI continue failed: ${errorMessage}`);
-      console.error("Continue AI control error:", error);
-    }
+    mutateAIStatus({
+      ...aiStatus,
+      status: "running",
+    });
+    mutateServerStatus();
+    toast.success("AI control resumed successfully");
   };
 
   return (
@@ -336,6 +298,35 @@ export function AIControlPage() {
                     disabled={aiStatus?.status !== "stopped"}
                     emptyMessage="Make sure this is a public model available on Hugging Face."
                   />
+                  {modelConfiguration?.checkpoints && (
+                    <Select
+                      value={
+                        selectedCheckpoint !== null
+                          ? selectedCheckpoint.toString()
+                          : "main"
+                      }
+                      onValueChange={(value) => {
+                        if (value === "main") {
+                          setSelectedCheckpoint(null);
+                        } else {
+                          setSelectedCheckpoint(parseInt(value, 10));
+                        }
+                        console.log("Selected checkpoint:", value);
+                      }}
+                      disabled={aiStatus?.status !== "stopped"}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select checkpoint" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {modelConfiguration?.checkpoints?.map((checkpoint) => (
+                          <SelectItem key={checkpoint} value={checkpoint}>
+                            Checkpoint {checkpoint}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Button variant="outline" asChild>
                     <a
                       href={
@@ -351,52 +342,6 @@ export function AIControlPage() {
                     </a>
                   </Button>
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="checkpoint">Checkpoint to load</Label>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-xs">
-                          Select a specific checkpoint to load, or use the
-                          latest checkpoint.
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <Select
-                  value={
-                    selectedCheckpoint !== null
-                      ? selectedCheckpoint.toString()
-                      : "main"
-                  }
-                  onValueChange={(value) => {
-                    if (value === "main") {
-                      setSelectedCheckpoint(null);
-                    } else {
-                      setSelectedCheckpoint(parseInt(value, 10));
-                    }
-                    console.log("Selected checkpoint:", value);
-                  }}
-                  disabled={aiStatus?.status !== "stopped"}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select checkpoint" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {modelConfiguration?.checkpoints?.map((checkpoint) => (
-                      <SelectItem key={checkpoint} value={checkpoint}>
-                        Checkpoint-{checkpoint}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               <Accordion
@@ -498,6 +443,10 @@ export function AIControlPage() {
                 <div className="text-center mb-2">
                   <Badge variant={"outline"} className="text-sm px-3 py-1">
                     AI state: {aiStatus?.status}
+                    {aiStatus?.status === "waiting" && (
+                      // add spinner
+                      <LoaderCircle className="inline-block h-4 w-4 animate-spin ml-2" />
+                    )}
                   </Badge>
                 </div>
 
