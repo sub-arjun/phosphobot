@@ -735,8 +735,6 @@ class Gr00tN1(ActionModel):
         nb_iter = 0
         config = model_spawn_config.hf_model_config
 
-        db_state_updated = False
-
         while control_signal.is_in_loop():
             logger.debug(
                 f"AI control loop iteration {nb_iter}, status: {control_signal.status}"
@@ -836,17 +834,10 @@ class Gr00tN1(ActionModel):
                 control_signal.stop()
                 break
 
-            if not db_state_updated:
-                control_signal.set_running()
-                db_state_updated = True
-                # Small delay to let the UI update
-                await asyncio.sleep(1)
-
-            # Early stop
-            if not control_signal.is_in_loop():
-                break
-
             for action in actions:
+                # Early stop
+                if not control_signal.is_in_loop():
+                    break
                 # Send the new joint position to the robot
                 action_list = action.tolist()
                 for robot_index in range(len(robots)):

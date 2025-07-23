@@ -535,11 +535,11 @@ class ACT(ActionModel):
                 # Small delay to let the UI update
                 await asyncio.sleep(1)
 
-            # Early stop
-            if not control_signal.is_in_loop():
-                break
-
             for action in actions:
+                # Early stop
+                if not control_signal.is_in_loop():
+                    break
+
                 if unit == "rad":
                     if action.max() > 2 * np.pi:
                         logger.warning("Actions are in degrees. Converting to radians.")
