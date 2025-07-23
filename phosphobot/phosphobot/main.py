@@ -275,14 +275,14 @@ def run(
             help="(dev) Enable performance profiling. This generates profile.html."
         ),
     ] = False,
-    crash_telemetry: Annotated[
+    no_crash_telemetry: Annotated[
         bool,
         typer.Option(help="Disable crash reporting."),
-    ] = True,
-    usage_telemetry: Annotated[
+    ] = False,
+    no_usage_telemetry: Annotated[
         bool,
         typer.Option(help="Disable usage analytics."),
-    ] = True,
+    ] = False,
     no_telemetry: Annotated[
         bool,
         typer.Option(help="Disable all telemetry (Crash and Usage)."),
@@ -299,8 +299,8 @@ def run(
     config.ENABLE_CAMERAS = cameras
     config.PORT = port
     config.PROFILE = profile
-    config.CRASH_TELEMETRY = crash_telemetry
-    config.USAGE_TELEMETRY = usage_telemetry
+    config.CRASH_TELEMETRY = not no_crash_telemetry  # Enable crash telemetry by default
+    config.USAGE_TELEMETRY = not no_usage_telemetry  # Enable usage telemetry by default
     config.ENABLE_CAN = can
     config.MAX_OPENCV_INDEX = max_opencv_index
 
