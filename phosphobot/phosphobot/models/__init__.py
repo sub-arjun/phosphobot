@@ -993,12 +993,12 @@ class RobotPairRequest(BaseModel):
     Represents a pair of robots for leader-follower control.
     """
 
+    model_config = ConfigDict(extra="ignore")
+
     leader_id: int | None = Field(..., description="Serial number of the leader robot")
     follower_id: int | None = Field(
         ..., description="Serial number of the follower robot"
     )
-
-    model_config = ConfigDict(extra="ignore")
 
 
 class StartLeaderArmControlRequest(BaseModel):
