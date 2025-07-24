@@ -73,7 +73,7 @@ class SO100Hardware(BaseManipulator):
 
     _gravity_task: Optional[asyncio.Task] = None
 
-    _max_temperature_cache: dict = {}
+    
 
     @property
     def servo_id_to_motor_name(self):
@@ -107,6 +107,7 @@ class SO100Hardware(BaseManipulator):
         self.motors_bus.connect()
         self.is_connected = True
         self.init_config()
+        self._max_temperature_cache: dict = {}
 
     def disconnect(self):
         """
