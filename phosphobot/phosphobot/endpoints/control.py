@@ -28,6 +28,7 @@ from phosphobot.models import (
     AppControlData,
     CalibrateResponse,
     EndEffectorPosition,
+    EndEffectorReadRequest,
     FeedbackRequest,
     JointsReadRequest,
     JointsReadResponse,
@@ -475,6 +476,7 @@ async def move_sleep(
     description="Retrieve the position, orientation, and open status of the robot's end effector. Only available for manipulators.",
 )
 async def end_effector_read(
+    query: EndEffectorReadRequest | None = None,
     robot_id: int = 0,
     rcm: RobotConnectionManager = Depends(get_rcm),
 ) -> EndEffectorPosition:
@@ -482,6 +484,8 @@ async def end_effector_read(
     Get the position, orientation, and open status of the end effector.
     """
     robot = await rcm.get_robot(robot_id)
+    if query is None:
+        query = EndEffectorReadRequest(sync=False)
 
     if not isinstance(robot, BaseManipulator):
         raise HTTPException(
@@ -497,7 +501,7 @@ async def end_effector_read(
             detail=f"Call /move/init before using this endpoint for robot {robot.name}. ",
         )
 
-    position, orientation, open_status = robot.get_end_effector_state()
+    position, orientation, open_status = robot.get_end_effector_state(sync=query.sync)
     # Remove the initial position and orientation (used to zero the robot)
     position = position - initial_position
     orientation = orientation - initial_orientation_rad

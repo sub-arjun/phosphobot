@@ -67,6 +67,14 @@ class RobotStatus(BaseModel):
     nb_actions_received: int
 
 
+class EndEffectorReadRequest(BaseModel):
+    sync: bool = Field(
+        False,
+        description="If True, the simulation will first read the motor positions, synchronize them with the simulated robot, and then return the end effector position."
+        + "Useful for measurements, however it will take more time to respond.",
+    )
+
+
 class EndEffectorPosition(BaseModel):
     """
     End effector position for a movement in absolute frame.

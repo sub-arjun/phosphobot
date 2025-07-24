@@ -623,12 +623,26 @@ class BaseManipulator(BaseRobot):
             current_effector_orientation_rad,
         )
 
-    def get_end_effector_state(self):
+    def get_end_effector_state(
+        self, sync: bool = False
+    ) -> tuple[np.ndarray, np.ndarray, float]:
         """
         Return the position and orientation in radians of the end effector and the gripper opening value.
         The gripper opening value between 0 and 1.
+
+        Args:
+            sync: If True, the simulation will first read the motor positions, synchronize them with the simulated robot,
+                and then return the end effector position. Useful for measurements, however it will take more time to respond.
+
+        Returns:
+            A tuple containing:
+                - effector_position: The position of the end effector in the URDF link frame.
+                - effector_orientation_rad: The orientation of the end effector in radians.
+                - closing_gripper_value: The value of the gripper opening, between 0 and 1.
         """
-        effector_position, effector_orientation_rad = self.forward_kinematics()
+        effector_position, effector_orientation_rad = self.forward_kinematics(
+            sync_robot_pos=sync
+        )
         return effector_position, effector_orientation_rad, self.closing_gripper_value
 
     def read_joints_position(
