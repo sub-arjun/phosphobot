@@ -1,9 +1,10 @@
-// import controlschema from "@/assets/ControlSchema.png";
+// Enhanced GamepadControl with multi-arm single controller support
 import { LoadingPage } from "@/components/common/loading";
 import { SpeedSelect } from "@/components/common/speed-select";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -17,8 +18,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { fetcher } from "@/lib/utils";
-import { ServerStatus } from "@/types";
+import type { ServerStatus } from "@/types";
 import {
   ArrowDownFromLine,
   ArrowUpFromLine,
@@ -29,11 +39,33 @@ import {
   RotateCw,
   Space,
   Square,
+  Plus,
+  Minus,
+  AlertCircle,
+  Users,
+  Target,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import useSWR from "swr";
 
-// GamepadVisualizer component
+// Define types
+interface ControllerArmPair {
+  controller_index: number | null;
+  robot_name: string | null;
+  controller_name: string;
+}
+
+interface MultiArmGroup {
+  id: string;
+  name: string;
+  controller_index: number | null;
+  controller_name: string;
+  robot_names: string[];
+  control_mode: 'synchronized' | 'sequential';
+  active_robot_index: number; // For sequential mode
+}
+
 interface GamepadState {
   connected: boolean;
   buttons: boolean[];
@@ -41,6 +73,54 @@ interface GamepadState {
   axes: number[];
 }
 
+interface RobotMovement {
+  x: number;
+  y: number;
+  z: number;
+  rz: number;
+  rx: number;
+  ry: number;
+  toggleOpen?: boolean;
+}
+
+interface ControllerState {
+  buttonsPressed: Set<string>;
+  lastExecutionTime: number;
+  openState: number;
+  lastButtonStates: boolean[];
+  lastTriggerValue: number;
+  triggerControlActive: boolean;
+  resetSent: boolean;
+}
+
+interface AnalogValues {
+  leftTrigger: number;
+  rightTrigger: number;
+  leftStickX: number;
+  leftStickY: number;
+  rightStickX: number;
+  rightStickY: number;
+}
+
+interface GamepadInfo {
+  index: number;
+  id: string;
+  name: string;
+}
+
+type ControlType = "analog-vertical" | "analog-horizontal" | "digital" | "trigger";
+type ConfigMode = "individual" | "multi-arm";
+
+interface Control {
+  key: string;
+  label: string;
+  buttons: string[];
+  description: string;
+  icon: React.ReactNode;
+  type: ControlType;
+}
+
+// GamepadVisualizer component
 function GamepadVisualizer({ gamepadIndex }: { gamepadIndex: number | null }) {
   const [gamepadState, setGamepadState] = useState<GamepadState>({
     connected: false,
@@ -123,7 +203,7 @@ function GamepadVisualizer({ gamepadIndex }: { gamepadIndex: number | null }) {
   return (
     <Card className="mt-4">
       <CardHeader>
-        <CardTitle className="text-sm">Gamepad State</CardTitle>
+        <CardTitle className="text-sm">Controller {(gamepadIndex ?? 0) + 1} State</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div>
@@ -263,7 +343,7 @@ function ControlButton({
   analogValue,
   onClick,
 }: {
-  control: any;
+  control: Control;
   isActive: boolean;
   analogValue?: number;
   onClick?: () => void;
@@ -280,7 +360,6 @@ function ControlButton({
         onClick();
       }, 100); // Send command every 100ms while held
     } else {
-      // For digital controls, just single click
       onClick();
     }
   };
@@ -358,15 +437,25 @@ export function GamepadControl() {
   );
 
   const [isMoving, setIsMoving] = useState(false);
-  const [activeButtons, setActiveButtons] = useState<Set<string>>(new Set());
-  const [analogValues, setAnalogValues] = useState<{
-    leftTrigger: number;
-    rightTrigger: number;
-    leftStickX: number;
-    leftStickY: number;
-    rightStickX: number;
-    rightStickY: number;
-  }>({
+  const [selectedSpeed, setSelectedSpeed] = useState<number>(0.8);
+  const [configMode, setConfigMode] = useState<ConfigMode>("individual");
+  
+  // Multi-gamepad and multi-arm support states
+  const [gamepadConnected, setGamepadConnected] = useState(false);
+  const [availableGamepads, setAvailableGamepads] = useState<GamepadInfo[]>([]);
+  const [controllerArmPairs, setControllerArmPairs] = useState<ControllerArmPair[]>([
+    { controller_index: null, robot_name: null, controller_name: "" },
+  ]);
+  
+  // Multi-arm group states
+  const [multiArmGroups, setMultiArmGroups] = useState<MultiArmGroup[]>([]);
+  
+  const [hasUserMadeSelection, setHasUserMadeSelection] = useState(false);
+
+  // Active states for visual feedback - one per pair/group
+  const [activeButtonsPerPair, setActiveButtonsPerPair] = useState<Map<number, Set<string>>>(new Map());
+  const [analogValuesPerController, setAnalogValuesPerController] = useState<Map<number, AnalogValues>>(new Map());
+  const [_, setAnalogValues] = useState<AnalogValues>({
     leftTrigger: 0,
     rightTrigger: 0,
     leftStickX: 0,
@@ -374,23 +463,9 @@ export function GamepadControl() {
     rightStickX: 0,
     rightStickY: 0,
   });
-  const [selectedRobotName, setSelectedRobotName] = useState<string | null>(
-    null,
-  );
-  const [selectedSpeed, setSelectedSpeed] = useState<number>(0.8);
-  const [gamepadConnected, setGamepadConnected] = useState(false);
-  const [gamepadIndex, setGamepadIndex] = useState<number | null>(null);
-  const [autoStartTriggered, setAutoStartTriggered] = useState(false);
 
-  // Refs to manage our control loop and state
-  const buttonsPressed = useRef(new Set<string>());
-  const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
-  const lastExecutionTimeRef = useRef(0);
-  const openStateRef = useRef(1);
-  const lastButtonStates = useRef<boolean[]>([]);
-  const lastTriggerValue = useRef<number>(0);
-  const triggerControlActive = useRef(false);
-  const resetSent = useRef(false);
+  // Refs to manage control state for each pair/group
+  const controlStates = useRef<Map<string, ControllerState>>(new Map());
 
   // Configuration constants
   const BASE_URL = `http://${window.location.hostname}:${window.location.port}/`;
@@ -401,15 +476,6 @@ export function GamepadControl() {
   const AXIS_DEADZONE = 0.15; // Deadzone for analog sticks
   const AXIS_SCALE = 2; // Scale factor for analog stick movement
 
-  interface RobotMovement {
-    x: number;
-    y: number;
-    z: number;
-    rz: number;
-    rx: number;
-    ry: number;
-    toggleOpen?: boolean;
-  }
 
   // Gamepad button mappings (standard gamepad layout)
   const BUTTON_MAPPINGS: Record<number, RobotMovement> = {
@@ -427,11 +493,18 @@ export function GamepadControl() {
     10: { x: 0, y: 0, z: 0, rz: 0, rx: 0, ry: 0 }, // Start/Menu (alternate index) - move to sleep position (handled specially)
   };
 
-  // Axis mappings for analog sticks
-  // Left stick: Rotation (X-axis) and Forward/Backward (Y-axis)
-  // Right stick: Left/Right strafe (X-axis) and Up/Down (Y-axis)
+  // Special button mappings for multi-arm control
+  const MULTI_ARM_SPECIAL_BUTTONS: Record<number, string> = {
+    // Select button (8) or Back button for switching active robot in sequential mode
+    8: 'switch_robot',
+    // L3/R3 (stick clicks) for mode switching
+    10: 'mode_switch',
+    11: 'mode_switch',
+  };
+
   const processAnalogSticks = (
     gamepad: Gamepad,
+    lastTriggerValue: number = 0,
   ): RobotMovement & { gripperValue?: number } => {
     const movement: RobotMovement & { gripperValue?: number } = {
       x: 0,
@@ -488,14 +561,14 @@ export function GamepadControl() {
     const triggerValue = Math.max(leftTrigger, rightTrigger);
 
     // Always return the current trigger value
-    if (triggerValue > 0 || lastTriggerValue.current > 0) {
+    if (triggerValue > 0 || lastTriggerValue > 0) {
       movement.gripperValue = triggerValue;
     }
 
     return movement;
   };
 
-  const robotIDFromName = (name?: string | null) => {
+  const robotIDFromName = (name?: string | null): number => {
     if (name === undefined || name === null || !serverStatus?.robot_status) {
       return 0;
     }
@@ -506,11 +579,14 @@ export function GamepadControl() {
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const postData = async (url: string, data: any, queryParam?: any) => {
+  const postData = async (url: string, data: Record<string, unknown>, queryParam?: Record<string, string | number>) => {
     try {
       let newUrl = url;
       if (queryParam) {
-        const urlParams = new URLSearchParams(queryParam);
+        const urlParams = new URLSearchParams();
+        Object.entries(queryParam).forEach(([key, value]) => {
+          urlParams.append(key, value.toString());
+        });
         if (urlParams.toString()) {
           newUrl += "?" + urlParams.toString();
         }
@@ -532,80 +608,192 @@ export function GamepadControl() {
     }
   };
 
-  // Gamepad connection handlers
+  // Enhanced gamepad detection and management
   useEffect(() => {
+    const updateGamepadList = () => {
+      const gamepads = navigator.getGamepads();
+      const available: GamepadInfo[] = [];
+      
+      for (let i = 0; i < gamepads.length; i++) {
+        const gamepad = gamepads[i];
+        if (gamepad) {
+          const fullName = gamepad.id;
+          const shortName = fullName.split(' ').slice(0, 3).join(' ');
+          
+          available.push({
+            index: i,
+            id: fullName,
+            name: shortName || `Controller ${i + 1}`
+          });
+        }
+      }
+      
+      setAvailableGamepads(available);
+      setGamepadConnected(available.length > 0);
+      
+      // Auto-select logic remains the same
+      const hasAnyControllerAssigned = controllerArmPairs.some(pair => pair.controller_index !== null) ||
+                                      multiArmGroups.some(group => group.controller_index !== null);
+      
+      if (available.length > 0 && !hasAnyControllerAssigned && !hasUserMadeSelection) {
+        if (configMode === "individual") {
+          setControllerArmPairs(prev => {
+            const newPairs = [...prev];
+            newPairs[0] = {
+              ...newPairs[0],
+              controller_index: available[0].index,
+              controller_name: available[0].name,
+            };
+            return newPairs;
+          });
+        } else {
+          setMultiArmGroups(prev => {
+            const newGroups = [...prev];
+            if (newGroups.length > 0) {
+              newGroups[0] = {
+                ...newGroups[0],
+                controller_index: available[0].index,
+                controller_name: available[0].name,
+              };
+            }
+            return newGroups;
+          });
+        }
+      }
+      
+      // Handle complete disconnection
+      if (available.length === 0 && hasAnyControllerAssigned) {
+        if (configMode === "individual") {
+          setControllerArmPairs(prev => 
+            prev.map(pair => ({
+              ...pair,
+              controller_index: null,
+              controller_name: "",
+            }))
+          );
+        } else {
+          setMultiArmGroups(prev => 
+            prev.map(group => ({
+              ...group,
+              controller_index: null,
+              controller_name: "",
+            }))
+          );
+        }
+        setHasUserMadeSelection(false);
+      }
+    };
+
     const handleGamepadConnected = (e: GamepadEvent) => {
       console.log("Gamepad connected:", e.gamepad);
-      setGamepadConnected(true);
-      setGamepadIndex(e.gamepad.index);
+      updateGamepadList();
     };
 
     const handleGamepadDisconnected = (e: GamepadEvent) => {
       console.log("Gamepad disconnected:", e.gamepad);
-      if (e.gamepad.index === gamepadIndex) {
-        setGamepadConnected(false);
-        setGamepadIndex(null);
-        buttonsPressed.current.clear();
-      }
+      updateGamepadList();
     };
+
+    updateGamepadList();
+    const intervalId = setInterval(updateGamepadList, 1000);
 
     window.addEventListener("gamepadconnected", handleGamepadConnected);
     window.addEventListener("gamepaddisconnected", handleGamepadDisconnected);
 
-    // Check for already connected gamepads
-    const gamepads = navigator.getGamepads();
-    for (let i = 0; i < gamepads.length; i++) {
-      if (gamepads[i]) {
-        setGamepadConnected(true);
-        setGamepadIndex(i);
-        break;
-      }
-    }
-
     return () => {
+      clearInterval(intervalId);
       window.removeEventListener("gamepadconnected", handleGamepadConnected);
-      window.removeEventListener(
-        "gamepaddisconnected",
-        handleGamepadDisconnected,
-      );
+      window.removeEventListener("gamepaddisconnected", handleGamepadDisconnected);
     };
-  }, [gamepadIndex]);
+  }, [hasUserMadeSelection, configMode]);
 
+  // Auto-select robot when server status loads
   useEffect(() => {
     if (
-      !selectedRobotName &&
+      !controllerArmPairs[0].robot_name &&
       serverStatus?.robot_status &&
       serverStatus.robot_status.length > 0 &&
-      serverStatus.robot_status[0].device_name
+      serverStatus.robot_status[0].device_name &&
+      configMode === "individual"
     ) {
-      setSelectedRobotName(serverStatus.robot_status[0].device_name);
+      setControllerArmPairs(prev => {
+        const newPairs = [...prev];
+        newPairs[0] = {
+          ...newPairs[0],
+          robot_name: serverStatus.robot_status[0].device_name || null,
+        };
+        return newPairs;
+      });
     }
-  }, [serverStatus, selectedRobotName]);
+  }, [serverStatus, configMode]);
 
-  // Auto-start when both gamepad is connected and robot is selected
+  // Initialize multi-arm group when switching modes
   useEffect(() => {
-    if (
-      gamepadConnected &&
-      selectedRobotName &&
-      !isMoving &&
-      !autoStartTriggered
-    ) {
-      setAutoStartTriggered(true);
-      startMoving();
+    if (configMode === "multi-arm" && multiArmGroups.length === 0 && serverStatus?.robot_status) {
+      const availableRobots = serverStatus.robot_status
+        .filter(robot => robot.device_name)
+        .map(robot => robot.device_name!);
+      
+      if (availableRobots.length >= 2) {
+        // Create initial group with first 2-3 robots, but don't assign all robots automatically
+        const initialRobotCount = Math.min(3, Math.ceil(availableRobots.length / 2));
+        setMultiArmGroups([{
+          id: 'group-1',
+          name: 'Multi-Arm Group 1',
+          controller_index: null,
+          controller_name: '',
+          robot_names: availableRobots.slice(0, initialRobotCount),
+          control_mode: 'synchronized',
+          active_robot_index: 0,
+        }]);
+      }
     }
-  }, [gamepadConnected, selectedRobotName, isMoving, autoStartTriggered]);
+  }, [configMode, serverStatus, multiArmGroups.length]);
 
-  // Main control loop
+  // Main control loop - enhanced for multi-arm support
   useEffect(() => {
-    if (isMoving && gamepadConnected && gamepadIndex !== null) {
-      const controlRobot = () => {
-        const gamepads = navigator.getGamepads();
-        const gamepad = gamepads[gamepadIndex];
+    if (!isMoving) return;
 
+    let activeConfigs: any[] = [];
+    
+    if (configMode === "individual") {
+      activeConfigs = controllerArmPairs.filter(
+        pair => pair.controller_index !== null && pair.robot_name !== null
+      );
+    } else {
+      activeConfigs = multiArmGroups.filter(
+        group => group.controller_index !== null && group.robot_names.length > 0
+      );
+    }
+
+    if (activeConfigs.length === 0) return;
+
+    const controlAllRobots = () => {
+      const gamepads = navigator.getGamepads();
+
+      activeConfigs.forEach((config, configIndex) => {
+        const gamepad = gamepads[config.controller_index!];
         if (!gamepad) return;
 
+        const configKey = configMode === "individual" ? `individual-${configIndex}` : `group-${config.id}`;
+        
+        // Get or create control state
+        if (!controlStates.current.has(configKey)) {
+          controlStates.current.set(configKey, {
+            buttonsPressed: new Set<string>(),
+            lastExecutionTime: 0,
+            openState: 1,
+            lastButtonStates: [],
+            lastTriggerValue: 0,
+            triggerControlActive: false,
+            resetSent: false,
+          });
+        }
+
+        const state = controlStates.current.get(configKey)!;
         const currentTime = Date.now();
-        if (currentTime - lastExecutionTimeRef.current >= DEBOUNCE_INTERVAL) {
+
+        if (currentTime - state.lastExecutionTime >= DEBOUNCE_INTERVAL) {
           let deltaX = 0,
             deltaY = 0,
             deltaZ = 0,
@@ -614,16 +802,20 @@ export function GamepadControl() {
             deltaRY = 0;
           let didToggleOpen = false;
 
-          // Process button inputs
-          gamepad.buttons.forEach((button, index) => {
-            const wasPressed = lastButtonStates.current[index] || false;
-            const isPressed = button.pressed;
-
-            if (isPressed && !wasPressed) {
-              // Button just pressed
-              if (BUTTON_MAPPINGS[index]) {
-                // Set active button for visual feedback
-                const buttonNames = [
+          // Helper function to get control name from button index
+          const getControlName = (index: number): string => {
+            if (index === 0) return "wrist-pitch-down";
+            else if (index === 1) return "wrist-roll-right";
+            else if (index === 2) return "wrist-roll-left";
+            else if (index === 3) return "wrist-pitch-up";
+            else if (index === 4 || index === 5) return "gripper-toggle";
+            else if (index === 9 || index === 10) return "sleep";
+            else if (index === 12) return "wrist-pitch-up";
+            else if (index === 13) return "wrist-pitch-down";
+            else if (index === 14) return "wrist-roll-left";
+            else if (index === 15) return "wrist-roll-right";
+            
+            const buttonNames = [
                   "A/X",
                   "B/Circle",
                   "X/Square",
@@ -641,109 +833,92 @@ export function GamepadControl() {
                   "D-Pad Left",
                   "D-Pad Right",
                 ];
-                const buttonName = buttonNames[index] || `Button ${index}`;
+            return buttonNames[index] || `Button ${index}`;
+          };
 
-                // Map to combined control names
-                let controlName = buttonName;
-                if (index === 0)
-                  controlName = "wrist-pitch-down"; // A
-                else if (index === 1)
-                  controlName = "wrist-roll-right"; // B
-                else if (index === 2)
-                  controlName = "wrist-roll-left"; // X
-                else if (index === 3)
-                  controlName = "wrist-pitch-up"; // Y
-                else if (index === 4 || index === 5)
-                  controlName = "gripper-toggle"; // L1 or R1
-                else if (index === 9 || index === 10)
-                  controlName = "sleep"; // Start
-                else if (index === 12)
-                  controlName = "wrist-pitch-up"; // D-pad Up
-                else if (index === 13)
-                  controlName = "wrist-pitch-down"; // D-pad Down
-                else if (index === 14)
-                  controlName = "wrist-roll-left"; // D-pad Left
-                else if (index === 15) controlName = "wrist-roll-right"; // D-pad Right
+          // Process button inputs
+          gamepad.buttons.forEach((button, index) => {
+            const wasPressed = state.lastButtonStates[index] || false;
+            const isPressed = button.pressed;
 
-                setActiveButtons((prev) => new Set(prev).add(controlName));
+            if (isPressed && !wasPressed) {
+              // Handle multi-arm special buttons first
+              if (configMode === "multi-arm" && MULTI_ARM_SPECIAL_BUTTONS[index]) {
+                const specialAction = MULTI_ARM_SPECIAL_BUTTONS[index];
+                
+                if (specialAction === 'switch_robot' && 'active_robot_index' in config) {
+                  // Switch active robot in sequential mode
+                  if (config.control_mode === 'sequential') {
+                    setMultiArmGroups(prev => prev.map(group => 
+                      group.id === config.id 
+                        ? { ...group, active_robot_index: (group.active_robot_index + 1) % group.robot_names.length }
+                        : group
+                    ));
+                    toast.info(`Switched to ${config.robot_names[(config.active_robot_index + 1) % config.robot_names.length]}`);
+                  }
+                }
+                
+                return; // Don't process as regular movement
+              }
 
-                if ((index === 9 || index === 10) && !resetSent.current) {
-                  // Start button - move to sleep position
-                  postData(
-                    BASE_URL + "move/sleep",
-                    {},
-                    {
-                      robot_id: robotIDFromName(selectedRobotName),
-                    },
-                  );
-                  resetSent.current = true;
+              // Regular button processing
+              if (BUTTON_MAPPINGS[index]) {
+                const controlName = getControlName(index);
+
+                // Update visual feedback for active buttons
+                setActiveButtonsPerPair((prev) => {
+                  const newMap = new Map(prev);
+                  const currentSet = newMap.get(configIndex) || new Set();
+                  newMap.set(configIndex, new Set(currentSet).add(controlName));
+                  return newMap;
+                });
+
+                if ((index === 9 || index === 10) && !state.resetSent) {
+                  // Sleep command - apply to relevant robots
+                  const robotsToControl = getRobotsToControl(config);
+                  robotsToControl.forEach(robotName => {
+                    postData(
+                      BASE_URL + "move/sleep",
+                      {},
+                      {
+                        robot_id: robotIDFromName(robotName),
+                      },
+                    );
+                  });
+                  state.resetSent = true;
                 } else if (BUTTON_MAPPINGS[index].toggleOpen) {
                   didToggleOpen = true;
                 } else {
-                  buttonsPressed.current.add(index.toString());
+                  state.buttonsPressed.add(index.toString());
                 }
               }
             } else if (!isPressed && wasPressed) {
               // Button just released
               if (index === 9 || index === 10) {
-                resetSent.current = false; // Allow reset to be sent again
+                state.resetSent = false;
               }
-              buttonsPressed.current.delete(index.toString());
-              // Clear active button when released
-              const buttonNames = [
-                "A/X",
-                "B/Circle",
-                "X/Square",
-                "Y/Triangle",
-                "L1/LB",
-                "R1/RB",
-                "L2/LT",
-                "R2/RT",
-                "Select/Back",
-                "Start/Menu",
-                "L3",
-                "R3",
-                "D-Pad Up",
-                "D-Pad Down",
-                "D-Pad Left",
-                "D-Pad Right",
-              ];
-              const buttonName = buttonNames[index] || `Button ${index}`;
+              state.buttonsPressed.delete(index.toString());
+              
+              // Clear active button when released for visual feedback
+              if (BUTTON_MAPPINGS[index]) {
+                const controlName = getControlName(index);
 
-              // Map to combined control names
-              let controlName = buttonName;
-              if (index === 0)
-                controlName = "wrist-pitch-down"; // A
-              else if (index === 1)
-                controlName = "wrist-roll-right"; // B
-              else if (index === 2)
-                controlName = "wrist-roll-left"; // X
-              else if (index === 3)
-                controlName = "wrist-pitch-up"; // Y
-              else if (index === 4 || index === 5)
-                controlName = "gripper-toggle"; // L1 or R1
-              else if (index === 9 || index === 10)
-                controlName = "sleep"; // Start
-              else if (index === 12)
-                controlName = "wrist-pitch-up"; // D-pad Up
-              else if (index === 13)
-                controlName = "wrist-pitch-down"; // D-pad Down
-              else if (index === 14)
-                controlName = "wrist-roll-left"; // D-pad Left
-              else if (index === 15) controlName = "wrist-roll-right"; // D-pad Right
-
-              setActiveButtons((prev) => {
-                const newSet = new Set(prev);
-                newSet.delete(controlName);
-                return newSet;
-              });
+                setActiveButtonsPerPair((prev) => {
+                  const newMap = new Map(prev);
+                  const currentSet = newMap.get(configIndex) || new Set();
+                  const newSet = new Set(currentSet);
+                  newSet.delete(controlName);
+                  newMap.set(configIndex, newSet);
+                  return newMap;
+                });
+              }
             }
 
-            lastButtonStates.current[index] = isPressed;
+            state.lastButtonStates[index] = isPressed;
           });
 
           // Accumulate button movements
-          buttonsPressed.current.forEach((buttonStr) => {
+          state.buttonsPressed.forEach((buttonStr) => {
             const buttonIndex = parseInt(buttonStr);
             if (BUTTON_MAPPINGS[buttonIndex]) {
               deltaX += BUTTON_MAPPINGS[buttonIndex].x;
@@ -756,7 +931,7 @@ export function GamepadControl() {
           });
 
           // Process analog stick inputs
-          const analogMovement = processAnalogSticks(gamepad);
+          const analogMovement = processAnalogSticks(gamepad, state.lastTriggerValue);
           deltaX += analogMovement.x;
           deltaY += analogMovement.y;
           deltaZ += analogMovement.z;
@@ -764,79 +939,31 @@ export function GamepadControl() {
           deltaRX += analogMovement.rx;
           deltaRY += analogMovement.ry;
 
-          // Update analog trigger values for visual feedback
-          let leftTriggerVal = 0;
-          let rightTriggerVal = 0;
-
-          // Check axes first
-          if (gamepad.axes.length >= 6) {
-            leftTriggerVal = gamepad.axes[6] > 0.1 ? gamepad.axes[6] : 0;
-            rightTriggerVal =
-              gamepad.axes[7] > -0.9 ? (gamepad.axes[7] + 1) / 2 : 0;
-          }
-
-          // Check buttons if no axis values
-          if (
-            leftTriggerVal === 0 &&
-            gamepad.buttons.length > 6 &&
-            gamepad.buttons[6]
-          ) {
-            leftTriggerVal = gamepad.buttons[6].value || 0;
-          }
-          if (
-            rightTriggerVal === 0 &&
-            gamepad.buttons.length > 7 &&
-            gamepad.buttons[7]
-          ) {
-            rightTriggerVal = gamepad.buttons[7].value || 0;
-          }
-
-          // Get analog stick values
-          const leftStickX =
-            Math.abs(gamepad.axes[0]) > AXIS_DEADZONE ? gamepad.axes[0] : 0;
-          const leftStickY =
-            Math.abs(gamepad.axes[1]) > AXIS_DEADZONE ? gamepad.axes[1] : 0;
-          const rightStickX =
-            Math.abs(gamepad.axes[2]) > AXIS_DEADZONE ? gamepad.axes[2] : 0;
-          const rightStickY =
-            Math.abs(gamepad.axes[3]) > AXIS_DEADZONE ? gamepad.axes[3] : 0;
-
-          setAnalogValues({
-            leftTrigger: leftTriggerVal,
-            rightTrigger: rightTriggerVal,
-            leftStickX: leftStickX,
-            leftStickY: leftStickY,
-            rightStickX: rightStickX,
-            rightStickY: rightStickY,
-          });
-
           // Handle gripper control
-          let gripperValue = openStateRef.current;
+          let gripperValue = state.openState;
 
-          // Check if trigger value has changed significantly (this can reactivate trigger control)
+          // Check if trigger value has changed significantly
           if (
             analogMovement.gripperValue !== undefined &&
-            Math.abs(analogMovement.gripperValue - lastTriggerValue.current) >
-              0.05
+            Math.abs(analogMovement.gripperValue - state.lastTriggerValue) > 0.05
           ) {
             // Trigger value changed - it can take control
-            triggerControlActive.current = true;
-            lastTriggerValue.current = analogMovement.gripperValue;
+            state.triggerControlActive = true;
+            state.lastTriggerValue = analogMovement.gripperValue;
           }
 
           if (didToggleOpen) {
             // A button was pressed - always toggle and disable trigger control
-            // const previousState = openStateRef.current;
-            openStateRef.current = openStateRef.current > 0.5 ? 0 : 1;
-            gripperValue = openStateRef.current;
-            triggerControlActive.current = false;
+            state.openState = state.openState > 0.5 ? 0 : 1;
+            gripperValue = state.openState;
+            state.triggerControlActive = false;
           } else if (
             analogMovement.gripperValue !== undefined &&
-            triggerControlActive.current
+            state.triggerControlActive
           ) {
             // Use trigger value for gripper only if trigger control is active
             gripperValue = analogMovement.gripperValue;
-            openStateRef.current = gripperValue;
+            state.openState = gripperValue;
           }
 
           // Apply speed scaling to all robot types
@@ -856,7 +983,7 @@ export function GamepadControl() {
             deltaRY !== 0 ||
             didToggleOpen ||
             (analogMovement.gripperValue !== undefined &&
-              triggerControlActive.current)
+               state.triggerControlActive)
           ) {
             const data = {
               x: deltaX,
@@ -867,38 +994,134 @@ export function GamepadControl() {
               rz: deltaRZ,
               open: gripperValue,
             };
-            postData(BASE_URL + "move/relative", data, {
-              robot_id: robotIDFromName(selectedRobotName),
+
+            // Send commands to appropriate robots based on config mode
+            const robotsToControl = getRobotsToControl(config);
+            robotsToControl.forEach((robotName, _) => {
+              let finalData = { ...data };
+              
+              // Apply control mode modifications
+              if (configMode === "multi-arm" && 'control_mode' in config) {
+                finalData = applyControlMode(data, config.control_mode);
+              }
+              
+              postData(BASE_URL + "move/relative", finalData, {
+                robot_id: robotIDFromName(robotName),
+              });
             });
           }
-          lastExecutionTimeRef.current = currentTime;
+          state.lastExecutionTime = currentTime;
         }
-      };
+      });
 
-      const intervalId = setInterval(controlRobot, LOOP_INTERVAL);
-      intervalIdRef.current = intervalId;
-      return () => {
-        if (intervalIdRef.current) {
-          clearInterval(intervalIdRef.current);
+      // Update visual feedback for all active controllers
+      if (activeConfigs.length > 0) {
+        const allActiveControllerIndices = new Set<number>();
+        
+        activeConfigs.forEach(config => {
+          if (config.controller_index !== null) {
+            allActiveControllerIndices.add(config.controller_index);
+          }
+        });
+
+        // Update analog values for each unique controller
+        const newAnalogValuesPerController = new Map<number, AnalogValues>();
+        
+        allActiveControllerIndices.forEach(controllerIndex => {
+          const gamepad = gamepads[controllerIndex];
+          if (gamepad) {
+            // Update analog trigger values
+            let leftTriggerVal = 0;
+            let rightTriggerVal = 0;
+
+            // Check axes first
+            if (gamepad.axes.length >= 6) {
+              leftTriggerVal = gamepad.axes[6] > 0.1 ? gamepad.axes[6] : 0;
+              rightTriggerVal = gamepad.axes[7] > -0.9 ? (gamepad.axes[7] + 1) / 2 : 0;
+            }
+
+            // Check buttons if no axis values
+            if (leftTriggerVal === 0 && gamepad.buttons.length > 6 && gamepad.buttons[6]) {
+              leftTriggerVal = gamepad.buttons[6].value || 0;
+            }
+            if (rightTriggerVal === 0 && gamepad.buttons.length > 7 && gamepad.buttons[7]) {
+              rightTriggerVal = gamepad.buttons[7].value || 0;
+            }
+
+            // Get analog stick values
+            const leftStickX = Math.abs(gamepad.axes[0]) > AXIS_DEADZONE ? gamepad.axes[0] : 0;
+            const leftStickY = Math.abs(gamepad.axes[1]) > AXIS_DEADZONE ? gamepad.axes[1] : 0;
+            const rightStickX = Math.abs(gamepad.axes[2]) > AXIS_DEADZONE ? gamepad.axes[2] : 0;
+            const rightStickY = Math.abs(gamepad.axes[3]) > AXIS_DEADZONE ? gamepad.axes[3] : 0;
+
+            newAnalogValuesPerController.set(controllerIndex, {
+              leftTrigger: leftTriggerVal,
+              rightTrigger: rightTriggerVal,
+              leftStickX: leftStickX,
+              leftStickY: leftStickY,
+              rightStickX: rightStickX,
+              rightStickY: rightStickY,
+            });
+          }
+        });
+
+        setAnalogValuesPerController(newAnalogValuesPerController);
+
+        // Also update the legacy analogValues for the first controller (backward compatibility)
+        const firstControllerIndex = Array.from(allActiveControllerIndices)[0];
+        if (firstControllerIndex !== undefined && newAnalogValuesPerController.has(firstControllerIndex)) {
+          setAnalogValues(newAnalogValuesPerController.get(firstControllerIndex)!);
         }
-      };
+      }
+    };
+
+    const intervalId = setInterval(controlAllRobots, LOOP_INTERVAL);
+    
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [isMoving, controllerArmPairs, multiArmGroups, selectedSpeed, serverStatus, configMode]);
+
+  // Helper function to get robots to control based on config
+  const getRobotsToControl = (config: any): string[] => {
+    if (configMode === "individual") {
+      return [config.robot_name];
+    } else {
+      // Multi-arm group
+      if (config.control_mode === 'sequential') {
+        return [config.robot_names[config.active_robot_index]];
+      } else {
+        return config.robot_names;
+      }
     }
-  }, [
-    isMoving,
-    gamepadConnected,
-    gamepadIndex,
-    selectedSpeed,
-    serverStatus,
-    selectedRobotName,
-  ]);
+  };
 
-  const initRobot = async () => {
+  // Helper function to apply control mode modifications
+  const applyControlMode = (
+    data: any, 
+    controlMode: string, 
+  ): any => {
+    switch (controlMode) {
+      case 'synchronized':
+        // All robots move identically
+        return data;
+        
+      case 'sequential':
+        // Only active robot moves (handled in getRobotsToControl)
+        return data;
+        
+      default:
+        return data;
+    }
+  };
+
+  const initRobot = async (robotName: string) => {
     try {
       await postData(
         BASE_URL + "move/init",
         {},
         {
-          robot_id: robotIDFromName(selectedRobotName),
+          robot_id: robotIDFromName(robotName),
         },
       );
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -912,7 +1135,7 @@ export function GamepadControl() {
         open: 1,
       };
       await postData(BASE_URL + "move/absolute", initData, {
-        robot_id: robotIDFromName(selectedRobotName),
+        robot_id: robotIDFromName(robotName),
       });
     } catch (error) {
       console.error("Error during init:", error);
@@ -920,17 +1143,261 @@ export function GamepadControl() {
   };
 
   const startMoving = async () => {
-    await initRobot();
+    let robotsToInit: string[] = [];
+    
+    if (configMode === "individual") {
+      const validPairs = controllerArmPairs.filter(
+        pair => pair.controller_index !== null && pair.robot_name !== null
+      );
+      robotsToInit = validPairs.map(pair => pair.robot_name!);
+    } else {
+      const validGroups = multiArmGroups.filter(
+        group => group.controller_index !== null && group.robot_names.length > 0
+      );
+      robotsToInit = validGroups.flatMap(group => group.robot_names);
+    }
+
+    // Initialize all robots
+    for (const robotName of robotsToInit) {
+      await initRobot(robotName);
+    }
+    
     setIsMoving(true);
   };
 
   const stopMoving = async () => {
     setIsMoving(false);
-    buttonsPressed.current.clear();
+    controlStates.current.clear();
+    setActiveButtonsPerPair(new Map());
   };
 
-  const controls = [
-    // Movement controls
+  // Configuration mode switching
+  const switchConfigMode = (newMode: ConfigMode) => {
+    if (isMoving) {
+      return;
+    }
+    
+    setConfigMode(newMode);
+    setHasUserMadeSelection(false);
+    controlStates.current.clear();
+    setActiveButtonsPerPair(new Map());
+    
+    if (newMode === "multi-arm" && multiArmGroups.length === 0) {
+      // Initialize first multi-arm group
+      const availableRobots = serverStatus?.robot_status
+        ?.filter(robot => robot.device_name)
+        ?.map(robot => robot.device_name!) || [];
+      
+      if (availableRobots.length >= 2) {
+        setMultiArmGroups([{
+          id: 'group-1',
+          name: 'Multi-Arm Group 1',
+          controller_index: null,
+          controller_name: '',
+          robot_names: availableRobots.slice(0, 2),
+          control_mode: 'synchronized',
+          active_robot_index: 0,
+        }]);
+      }
+    }
+  };
+
+  // Multi-arm group management functions
+  const addMultiArmGroup = () => {
+    // Always allow adding groups - user can configure them after creation
+    setHasUserMadeSelection(true);
+
+    setMultiArmGroups([
+      ...multiArmGroups,
+      {
+        id: `group-${Date.now()}`,
+        name: `Multi-Arm Group ${multiArmGroups.length + 1}`,
+        controller_index: null, // Let user select
+        controller_name: '',
+        robot_names: [], // Let user select robots
+        control_mode: 'synchronized',
+        active_robot_index: 0,
+      },
+    ]);
+
+  };
+
+  const removeMultiArmGroup = (groupId: string) => {
+    if (multiArmGroups.length <= 1) {
+      return;
+    }
+
+    setMultiArmGroups(prev => prev.filter(group => group.id !== groupId));
+    controlStates.current.delete(`group-${groupId}`);
+  };
+
+  const updateMultiArmGroup = (groupId: string, updates: Partial<MultiArmGroup>) => {
+    if (updates.controller_index !== undefined) {
+      setHasUserMadeSelection(true);
+    }
+
+    setMultiArmGroups(prev => prev.map(group => 
+      group.id === groupId ? { ...group, ...updates } : group
+    ));
+  };
+
+  // Individual pair management functions (keeping existing functionality)
+  const addControllerArmPair = () => {
+    const usedControllerIds = new Set<number>();
+    const usedRobotNames = new Set<string>();
+
+    controllerArmPairs.forEach((pair) => {
+      if (pair.controller_index !== null) usedControllerIds.add(pair.controller_index);
+      if (pair.robot_name !== null) usedRobotNames.add(pair.robot_name);
+    });
+
+    const availableControllers = availableGamepads.filter(
+      (gamepad) => !usedControllerIds.has(gamepad.index)
+    );
+    const availableRobots = serverStatus?.robot_status?.filter(
+      (robot) => robot.device_name && !usedRobotNames.has(robot.device_name)
+    ) || [];
+
+    if (availableControllers.length >= 1 && availableRobots.length >= 1) {
+      const newController = availableControllers[0];
+      const newRobot = availableRobots[0];
+
+      setHasUserMadeSelection(true);
+
+      setControllerArmPairs([
+        ...controllerArmPairs,
+        {
+          controller_index: newController.index,
+          robot_name: newRobot.device_name || null,
+          controller_name: newController.name,
+        },
+      ]);
+    } else {
+      toast.error("Connect more controllers or robots to create a new pair");
+    }
+  };
+
+  const removeControllerArmPair = (pairIndex: number) => {
+    if (controllerArmPairs.length <= 1) {
+      return;
+    }
+
+    setControllerArmPairs((prevPairs) =>
+      prevPairs.filter((_, index) => index !== pairIndex)
+    );
+
+    controlStates.current.delete(`individual-${pairIndex}`);
+    setActiveButtonsPerPair((prev) => {
+      const newMap = new Map(prev);
+      newMap.delete(pairIndex);
+      return newMap;
+    });
+  };
+
+  const updateControllerArmPair = (
+    pairIndex: number,
+    field: keyof ControllerArmPair,
+    value: string | number,
+  ) => {
+    if (field === "controller_index") {
+      setHasUserMadeSelection(true);
+    }
+
+    setControllerArmPairs((prevPairs) => {
+      const newPairs = [...prevPairs];
+
+      if (field === "controller_index") {
+        const selectedController = availableGamepads.find(
+          (gamepad) => gamepad.index === parseInt(value.toString())
+        );
+        if (selectedController) {
+          newPairs[pairIndex] = {
+            ...newPairs[pairIndex],
+            controller_index: selectedController.index,
+            controller_name: selectedController.name,
+          };
+        }
+      } else if (field === "robot_name") {
+        newPairs[pairIndex] = {
+          ...newPairs[pairIndex],
+          robot_name: value.toString(),
+        };
+      } else if (field === "controller_name") {
+        newPairs[pairIndex] = {
+          ...newPairs[pairIndex],
+          controller_name: value.toString(),
+        };
+      }
+
+      return newPairs;
+    });
+  };
+
+  // Get available controllers/robots for individual mode
+  const getAvailableControllers = (currentPairIndex: number): GamepadInfo[] => {
+    const usedControllerIds = new Set<number>();
+
+    controllerArmPairs.forEach((pair, index) => {
+      if (index !== currentPairIndex && pair.controller_index !== null) {
+        usedControllerIds.add(pair.controller_index);
+      }
+    });
+
+    return availableGamepads.filter((gamepad) => !usedControllerIds.has(gamepad.index));
+  };
+
+  const getAvailableRobots = (currentPairIndex: number) => {
+    const usedRobotNames = new Set<string>();
+
+    controllerArmPairs.forEach((pair, index) => {
+      if (index !== currentPairIndex && pair.robot_name !== null) {
+        usedRobotNames.add(pair.robot_name);
+      }
+    });
+
+    return serverStatus?.robot_status?.filter(
+      (robot) => robot.device_name && !usedRobotNames.has(robot.device_name)
+    ) || [];
+  };
+
+  // Get available controllers/robots for multi-arm mode (allow controller reuse)
+  const getAvailableControllersForGroup = (): GamepadInfo[] => {
+    // Allow any controller to be used - don't exclude based on other groups
+    // This enables one controller to control multiple groups
+    return availableGamepads;
+  };
+
+  const getAvailableRobotsForGroup = (currentGroupId: string) => {
+    const usedRobotNames = new Set<string>();
+
+    multiArmGroups.forEach((group) => {
+      if (group.id !== currentGroupId) {
+        group.robot_names.forEach(name => usedRobotNames.add(name));
+      }
+    });
+
+    return serverStatus?.robot_status?.filter(
+      (robot) => robot.device_name && !usedRobotNames.has(robot.device_name)
+    ) || [];
+  };
+
+  // Check if configuration is valid
+  const isConfigValid = () => {
+    if (configMode === "individual") {
+      return controllerArmPairs.every(
+        (pair) => pair.controller_index !== null && pair.robot_name !== null
+      );
+    } else {
+      return multiArmGroups.every(
+        (group) => group.controller_index !== null && group.robot_names.length > 0
+      );
+    }
+  };
+
+  const hasAvailableGamepads = availableGamepads.length > 0;
+  const hasAvailableRobots = (serverStatus?.robot_status?.length || 0) > 0;
+
+  const controls: Control[] = [
     {
       key: "move-forward",
       label: "Forward",
@@ -1062,14 +1529,108 @@ export function GamepadControl() {
   return (
     <div className="container mx-auto px-4 py-6 space-y-8">
       <Card>
-        <CardContent className="pt-6">
+        <CardHeader className="flex flex-col gap-y-2">
+          <div className="flex items-center justify-between">
+            <CardDescription>
+              Control robot arms with game controllers - individual or multi-arm modes
+            </CardDescription>
+            <div className="flex items-center space-x-4">
+              <Label htmlFor="config-mode">Control Mode:</Label>
+              <div className="flex items-center space-x-2">
+                <Target className="h-4 w-4" />
+                <Switch
+                  id="config-mode"
+                  checked={configMode === "multi-arm"}
+                  onCheckedChange={(checked) => switchConfigMode(checked ? "multi-arm" : "individual")}
+                  disabled={isMoving}
+                />
+                <Users className="h-4 w-4" />
+              </div>
+              <Badge variant={configMode === "individual" ? "secondary" : "default"}>
+                {configMode === "individual" ? "Individual Control" : "Multi-Arm Control"}
+              </Badge>
+            </div>
+          </div>
+          
+          <Accordion type="single" collapsible>
+            <AccordionItem value="item-1">
+              <AccordionTrigger>How to setup?</AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-medium mb-2">General Setup:</h4>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li>Connect game controllers to your computer via USB or Bluetooth.</li>
+                      <li>Press any button on each controller to activate it.</li>
+                      <li>Ensure robot arms are connected via USB and powered on.</li>
+                      <li>Calibrate all robot arms by going to /calibration.</li>
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-medium mb-2">Individual Control Mode:</h4>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li>Each robot arm is controlled by one dedicated controller.</li>
+                      <li>Create multiple robot-controller pairs for independent control.</li>
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-medium mb-2">Multi-Arm Control Mode:</h4>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li><strong>Synchronized:</strong> All arms move identically together.</li>
+                      <li><strong>Sequential:</strong> Use Select/Back button to switch between arms.</li>
+                      <li>One controller can control multiple robot arms with different modes.</li>
+                    </ul>
+                  </div>
+                  
+                  <div className="bg-green-50 dark:bg-green-950 p-3 rounded-lg">
+                    <h4 className="font-medium mb-2">Example Scenarios:</h4>
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <strong>6 Robots + 2 Controllers (Separate):</strong>
+                        <ul className="list-disc pl-5 mt-1">
+                          <li>Group 1: Controller 1 → Robots A, B, C</li>
+                          <li>Group 2: Controller 2 → Robots D, E, F</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <strong>6 Robots + 1 Controller (Multiple Groups):</strong>
+                        <ul className="list-disc pl-5 mt-1">
+                          <li>Group 1: Controller 1 → Robots A, B, C (Synchronized)</li>
+                          <li>Group 2: Controller 1 → Robots D, E, F (Sequential)</li>
+                          <li>Use different special buttons or modes to switch between groups</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {configMode === "multi-arm" && (
+                    <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg">
+                      <h4 className="font-medium mb-2">Multi-Arm Special Controls:</h4>
+                      <ul className="list-disc pl-5 space-y-1 text-sm">
+                        <li><strong>Select/Back Button:</strong> Switch active robot in Sequential mode</li>
+                        <li><strong>L3/R3 (Stick Click):</strong> Reserved for future mode switching</li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-y-6">
+          {/* Gamepad Status Section */}
           <div className="flex flex-col items-center space-y-4">
             <div className="flex items-center gap-2">
               <Gamepad2
                 className={`size-8 ${gamepadConnected ? "text-green-500" : "text-gray-400"}`}
               />
               <span className="text-lg font-semibold">
-                {gamepadConnected ? "Gamepad Connected" : "No Gamepad Detected"}
+                {gamepadConnected 
+                  ? `${availableGamepads.length} ${availableGamepads.length === 1 ? 'Gamepad' : 'Gamepads'} Connected`
+                  : "No Gamepads Detected"
+                }
               </span>
             </div>
             {!gamepadConnected && (
@@ -1083,66 +1644,401 @@ export function GamepadControl() {
                 <p className="text-xs text-muted-foreground">
                   (Browser security requires a button press to detect gamepads)
                 </p>
-                {selectedRobotName && (
-                  <p className="text-sm text-green-600 dark:text-green-400 mt-2">
-                    Robot control will start automatically when gamepad is
-                    detected
-                  </p>
-                )}
               </div>
             )}
           </div>
 
-          <div className="flex items-center justify-center mt-6 gap-x-2 flex-wrap">
-            <Select
-              value={selectedRobotName || ""}
-              onValueChange={(value) => setSelectedRobotName(value)}
-              disabled={isMoving}
+          <div className="flex flex-col md:flex-row justify-center gap-4">
+            <Button
+              onClick={startMoving}
+              disabled={isMoving || !isConfigValid() || !hasAvailableGamepads || !hasAvailableRobots}
+              variant={isMoving ? "outline" : "default"}
+              size="lg"
             >
-              <SelectTrigger id="follower-robot" className="min-w-[200px]">
-                <SelectValue placeholder="Select robot to move" />
-              </SelectTrigger>
-              <SelectContent>
-                {serverStatus.robot_status.map((robot) => (
-                  <SelectItem
-                    key={robot.device_name}
-                    value={robot.device_name || "Undefined port"}
-                  >
-                    {robot.name} ({robot.device_name})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {isMoving ? (
-              <Button variant="destructive" onClick={stopMoving}>
-                <Square className="mr-2 h-4 w-4" />
-                Stop the Robot
-              </Button>
-            ) : (
-              <Button
-                variant="default"
-                onClick={startMoving}
-                disabled={!selectedRobotName || !gamepadConnected}
-              >
-                <Play className="mr-2 h-4 w-4" />
-                Start Moving Robot
-              </Button>
-            )}
+              {!isMoving && <Play className="mr-2 h-4 w-4" />}
+              {isMoving ? "Control Running" : "Start Control"}
+            </Button>
+            <Button
+              onClick={stopMoving}
+              disabled={!isMoving}
+              variant="destructive"
+              size="lg"
+            >
+              <Square className="mr-2 h-4 w-4" />
+              Stop Control
+            </Button>
             <SpeedSelect
               defaultValue={selectedSpeed}
               onChange={(newSpeed) => setSelectedSpeed(newSpeed)}
               title="Movement speed"
               minSpeed={0.1}
-              maxSpeed={2.0} // Allow faster speeds for all robot types
+              maxSpeed={2.0}
               step={0.1}
             />
           </div>
+
+          {/* Alert Messages */}
+          {!hasAvailableGamepads && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>No controllers detected</AlertTitle>
+              <AlertDescription>
+                Please connect a game controller and press any button to activate it.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!hasAvailableRobots && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>No robots detected</AlertTitle>
+              <AlertDescription>
+                Please make sure your robots are connected and powered on.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!isConfigValid() && hasAvailableGamepads && hasAvailableRobots && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Incomplete configuration</AlertTitle>
+              <AlertDescription>
+                Please complete the configuration below to start control.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Configuration Section */}
+          {configMode === "individual" ? (
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium">Robot-Controller Pairs</h3>
+                <div className="flex gap-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={addControllerArmPair}
+                          disabled={
+                            isMoving ||
+                            availableGamepads.length <= controllerArmPairs.length ||
+                            (serverStatus?.robot_status?.length || 0) <= controllerArmPairs.length
+                          }
+                        >
+                          <Plus className="h-4 w-4" />
+                          <span className="sr-only">Add robot-controller pair</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Add a new robot-controller pair</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </div>
+
+              {controllerArmPairs.map((pair, index) => (
+                <Card key={`controller-arm-pair-${index}`} className="p-4 mb-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="font-medium">Pair {index + 1}</h4>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeControllerArmPair(index)}
+                            disabled={isMoving || controllerArmPairs.length <= 1}
+                          >
+                            <Minus className="h-4 w-4" />
+                            <span className="sr-only">Remove robot-controller pair</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Remove this robot-controller pair</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+
+                  <div className="flex flex-col md:flex-row items-center gap-4">
+                    <div className="space-y-2 w-full">
+                      <Label htmlFor={`robot-arm-${index}`}>Robot Arm</Label>
+                      <Select
+                        value={pair.robot_name || ""}
+                        onValueChange={(value) => {
+                          updateControllerArmPair(index, "robot_name", value);
+                        }}
+                        disabled={isMoving}
+                      >
+                        <SelectTrigger id={`robot-arm-${index}`}>
+                          <SelectValue placeholder="Select robot arm" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getAvailableRobots(index).map((robot, key) => (
+                            <SelectItem
+                              key={`select-robot-${index}-${key}`}
+                              value={robot.device_name || "Undefined port"}
+                            >
+                              {robot.name} ({robot.device_name})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2 w-full">
+                      <Label htmlFor={`controller-${index}`}>Game Controller</Label>
+                      <Select
+                        value={pair.controller_index?.toString() || ""}
+                        onValueChange={(value) => {
+                          updateControllerArmPair(index, "controller_index", parseInt(value));
+                        }}
+                        disabled={isMoving}
+                      >
+                        <SelectTrigger id={`controller-${index}`}>
+                          <SelectValue placeholder="Select controller" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getAvailableControllers(index).map((controller) => (
+                            <SelectItem
+                              key={`select-controller-${index}-${controller.index}`}
+                              value={controller.index.toString()}
+                            >
+                              Controller {controller.index + 1}: {controller.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium">Multi-Arm Groups</h3>
+                <div className="flex gap-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={addMultiArmGroup}
+                          disabled={
+                            isMoving ||
+                            (serverStatus?.robot_status?.length || 0) === multiArmGroups.reduce((total, group) => total + group.robot_names.length, 0)
+                          }
+                        >
+                          <Plus className="h-4 w-4" />
+                          <span className="sr-only">Add multi-arm group</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Add a new multi-arm group</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </div>
+
+              {multiArmGroups.map((group) => (
+                <Card key={`multi-arm-group-${group.id}`} className="p-4 mb-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="font-medium">{group.name}</h4>
+                    <div className="flex items-center gap-2">
+                      {group.control_mode === 'sequential' && (
+                        <Badge variant="outline" className="text-xs">
+                          Active: {group.robot_names[group.active_robot_index] || 'None'}
+                        </Badge>
+                      )}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => removeMultiArmGroup(group.id)}
+                              disabled={isMoving || multiArmGroups.length <= 1}
+                            >
+                              <Minus className="h-4 w-4" />
+                              <span className="sr-only">Remove multi-arm group</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Remove this multi-arm group</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex flex-col md:flex-row gap-4">
+                      <div className="space-y-2 flex-1">
+                        <Label htmlFor={`group-controller-${group.id}`}>Game Controller</Label>
+                        <Select
+                          value={group.controller_index?.toString() || ""}
+                          onValueChange={(value) => {
+                            const selectedController = availableGamepads.find(
+                              (gamepad) => gamepad.index === parseInt(value)
+                            );
+                            if (selectedController) {
+                              updateMultiArmGroup(group.id, {
+                                controller_index: selectedController.index,
+                                controller_name: selectedController.name,
+                              });
+                            }
+                          }}
+                          disabled={isMoving}
+                        >
+                          <SelectTrigger id={`group-controller-${group.id}`}>
+                            <SelectValue placeholder="Select controller" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getAvailableControllersForGroup().map((controller) => (
+                              <SelectItem
+                                key={`select-group-controller-${group.id}-${controller.index}`}
+                                value={controller.index.toString()}
+                              >
+                                Controller {controller.index + 1}: {controller.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2 flex-1">
+                        <Label htmlFor={`group-mode-${group.id}`}>Control Mode</Label>
+                        <Select
+                          value={group.control_mode}
+                          onValueChange={(value: 'synchronized' | 'sequential') => {
+                            updateMultiArmGroup(group.id, { control_mode: value });
+                          }}
+                          disabled={isMoving}
+                        >
+                          <SelectTrigger id={`group-mode-${group.id}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="synchronized">
+                              <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4" />
+                                Synchronized - All move together
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="sequential">
+                              <div className="flex items-center gap-2">
+                                <Target className="h-4 w-4" />
+                                Sequential - Switch with Select button
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <Label>Robot Arms ({group.robot_names.length} selected)</Label>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              // Quick select all available robots
+                              const availableRobots = getAvailableRobotsForGroup(group.id);
+                              const allAvailable = [...group.robot_names, ...availableRobots.map(r => r.device_name!)];
+                              updateMultiArmGroup(group.id, { robot_names: allAvailable });
+                            }}
+                            disabled={isMoving || getAvailableRobotsForGroup(group.id).length === 0}
+                            className="text-xs"
+                          >
+                            Select All Available
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              updateMultiArmGroup(group.id, { robot_names: [] });
+                            }}
+                            disabled={isMoving}
+                            className="text-xs"
+                          >
+                            Clear All
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-32 overflow-y-auto">
+                        {serverStatus?.robot_status?.map((robot) => {
+                          const isUsedByOtherGroup = multiArmGroups.some(g => 
+                            g.id !== group.id && g.robot_names.includes(robot.device_name || '')
+                          );
+                          return (
+                            <div key={robot.device_name} className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id={`robot-${group.id}-${robot.device_name}`}
+                                checked={group.robot_names.includes(robot.device_name || '')}
+                                onChange={(e) => {
+                                  const robotName = robot.device_name || '';
+                                  if (e.target.checked) {
+                                    updateMultiArmGroup(group.id, {
+                                      robot_names: [...group.robot_names, robotName]
+                                    });
+                                  } else {
+                                    updateMultiArmGroup(group.id, {
+                                      robot_names: group.robot_names.filter(name => name !== robotName)
+                                    });
+                                  }
+                                }}
+                                disabled={isMoving || isUsedByOtherGroup}
+                                className="rounded"
+                              />
+                              <Label
+                                htmlFor={`robot-${group.id}-${robot.device_name}`}
+                                className={`text-sm font-normal cursor-pointer ${
+                                  isUsedByOtherGroup ? 'text-muted-foreground line-through' : ''
+                                }`}
+                              >
+                                {robot.name} ({robot.device_name})
+                                {isUsedByOtherGroup && (
+                                  <span className="text-xs text-orange-600 ml-1">(Used)</span>
+                                )}
+                              </Label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {group.robot_names.length === 0 && (
+                        <p className="text-sm text-red-600 dark:text-red-400">
+                          Select at least 1 robot arm for this group
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <Card>
-        <CardContent className="pt-6">
-          <h3 className="text-lg font-semibold mb-4">Gamepad Controls</h3>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-x-2">
+            <Gamepad2 className="size-4" />
+            Gamepad Controls Reference
+            {configMode === "multi-arm" && (
+              <Badge variant="secondary" className="ml-2">Multi-Arm Mode</Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div>
               <h4 className="font-medium mb-2">Movement & Rotation</h4>
@@ -1203,192 +2099,236 @@ export function GamepadControl() {
                 • <span className="font-medium">Start/Menu</span>: Move arm to
                 sleep position
               </li>
+              {configMode === "multi-arm" && (
+                <li>• <span className="font-medium">Select/Back</span>: Switch active robot (Sequential mode)</li>
+              )}
             </ul>
           </div>
 
+          {configMode === "multi-arm" && (
+            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
+              <h4 className="font-medium mb-2 flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Multi-Arm Control Modes
+              </h4>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <div>• <span className="font-medium">Synchronized</span>: All selected arms move identically</div>
+                <div>• <span className="font-medium">Sequential</span>: Control one arm at a time, switch with Select button</div>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {controls.map((control) => (
-              <TooltipProvider key={control.key}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    {control.type === "trigger" ? (
-                      <div>
+            {controls.map((control) => {
+              // Calculate combined analog values from all active controllers
+              const getCombinedAnalogValue = (controlKey: string): number => {
+                let maxValue = 0;
+                
+                analogValuesPerController.forEach((values) => {
+                  let currentValue = 0;
+                  
+                  switch (controlKey) {
+                    case "move-forward":
+                      currentValue = values.rightStickY < 0 ? -values.rightStickY : 0;
+                      break;
+                    case "move-backward":
+                      currentValue = values.rightStickY > 0 ? values.rightStickY : 0;
+                      break;
+                    case "move-left":
+                      currentValue = values.rightStickX < 0 ? -values.rightStickX : 0;
+                      break;
+                    case "move-right":
+                      currentValue = values.rightStickX > 0 ? values.rightStickX : 0;
+                      break;
+                    case "move-up":
+                      currentValue = values.leftStickY < 0 ? -values.leftStickY : 0;
+                      break;
+                    case "move-down":
+                      currentValue = values.leftStickY > 0 ? values.leftStickY : 0;
+                      break;
+                    case "rotate-left":
+                      currentValue = values.leftStickX < 0 ? -values.leftStickX : 0;
+                      break;
+                    case "rotate-right":
+                      currentValue = values.leftStickX > 0 ? values.leftStickX : 0;
+                      break;
+                  }
+                  
+                  maxValue = Math.max(maxValue, currentValue);
+                });
+                
+                return maxValue;
+              };
+
+              // Calculate combined trigger values
+              const getCombinedTriggerValue = (): number => {
+                let maxValue = 0;
+                
+                analogValuesPerController.forEach((values) => {
+                  const triggerValue = Math.max(values.leftTrigger, values.rightTrigger);
+                  maxValue = Math.max(maxValue, triggerValue);
+                });
+                
+                return maxValue;
+              };
+
+              return (
+                <TooltipProvider key={control.key}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      {control.type === "trigger" ? (
                         <TriggerButton
                           label={control.label}
                           buttons={control.buttons}
-                          value={Math.max(
-                            analogValues.leftTrigger,
-                            analogValues.rightTrigger,
-                          )}
+                          value={getCombinedTriggerValue()}
                           icon={control.icon}
-                          onClick={() => {
-                            // Only allow clicks when robot is moving
-                            if (!isMoving) return;
-
-                            // Toggle gripper for trigger button click
-                            openStateRef.current =
-                              openStateRef.current > 0.5 ? 0 : 1;
-                            const data = {
-                              x: 0,
-                              y: 0,
-                              z: 0,
-                              rx: 0,
-                              ry: 0,
-                              rz: 0,
-                              open: openStateRef.current,
-                            };
-                            postData(BASE_URL + "move/relative", data, {
-                              robot_id: robotIDFromName(selectedRobotName),
-                            });
-                          }}
                         />
-                      </div>
-                    ) : (
-                      <div>
+                      ) : (
                         <ControlButton
                           control={control}
-                          isActive={activeButtons.has(control.key)}
-                          analogValue={
-                            control.key === "move-forward"
-                              ? analogValues.rightStickY < 0
-                                ? -analogValues.rightStickY
-                                : 0
-                              : control.key === "move-backward"
-                                ? analogValues.rightStickY > 0
-                                  ? analogValues.rightStickY
-                                  : 0
-                                : control.key === "move-left"
-                                  ? analogValues.rightStickX < 0
-                                    ? -analogValues.rightStickX
-                                    : 0
-                                  : control.key === "move-right"
-                                    ? analogValues.rightStickX > 0
-                                      ? analogValues.rightStickX
-                                      : 0
-                                    : control.key === "move-up"
-                                      ? analogValues.leftStickY < 0
-                                        ? -analogValues.leftStickY
-                                        : 0
-                                      : control.key === "move-down"
-                                        ? analogValues.leftStickY > 0
-                                          ? analogValues.leftStickY
-                                          : 0
-                                        : control.key === "rotate-left"
-                                          ? analogValues.leftStickX < 0
-                                            ? -analogValues.leftStickX
-                                            : 0
-                                          : control.key === "rotate-right"
-                                            ? analogValues.leftStickX > 0
-                                              ? analogValues.leftStickX
-                                              : 0
-                                            : undefined
+                          isActive={
+                            Array.from(activeButtonsPerPair.values()).some(buttonSet => 
+                              buttonSet.has(control.key)
+                            )
                           }
-                          onClick={() => {
-                            // Only allow clicks when robot is moving
-                            if (!isMoving) return;
-
-                            // Handle click based on control type
-                            if (control.type === "digital") {
-                              // Simulate the button press for digital controls
-                              const data = {
-                                x: 0,
-                                y: 0,
-                                z: 0,
-                                rx: 0,
-                                ry: 0,
-                                rz: 0,
-                                open: openStateRef.current,
-                              };
-
-                              // Apply the control action
-                              if (control.key === "wrist-pitch-up") {
-                                data.rx = STEP_SIZE * 3.14;
-                              } else if (control.key === "wrist-pitch-down") {
-                                data.rx = -STEP_SIZE * 3.14;
-                              } else if (control.key === "wrist-roll-left") {
-                                data.ry = -STEP_SIZE * 3.14;
-                              } else if (control.key === "wrist-roll-right") {
-                                data.ry = STEP_SIZE * 3.14;
-                              } else if (control.key === "gripper-toggle") {
-                                openStateRef.current =
-                                  openStateRef.current > 0.5 ? 0 : 1;
-                                data.open = openStateRef.current;
-                              } else if (control.key === "sleep") {
-                                postData(
-                                  BASE_URL + "move/sleep",
-                                  {},
-                                  {
-                                    robot_id:
-                                      robotIDFromName(selectedRobotName),
-                                  },
-                                );
-                                return;
-                              }
-
-                              postData(BASE_URL + "move/relative", data, {
-                                robot_id: robotIDFromName(selectedRobotName),
-                              });
-                            } else if (control.type.startsWith("analog")) {
-                              // Handle analog controls
-                              const data = {
-                                x: 0,
-                                y: 0,
-                                z: 0,
-                                rx: 0,
-                                ry: 0,
-                                rz: 0,
-                                open: openStateRef.current,
-                              };
-
-                              // Apply movement based on control
-                              const moveAmount = STEP_SIZE * 2; // Slightly larger for click control
-
-                              if (control.key === "move-forward") {
-                                data.x = moveAmount;
-                              } else if (control.key === "move-backward") {
-                                data.x = -moveAmount;
-                              } else if (control.key === "move-left") {
-                                data.y = moveAmount;
-                              } else if (control.key === "move-right") {
-                                data.y = -moveAmount;
-                              } else if (control.key === "move-up") {
-                                data.z = moveAmount;
-                              } else if (control.key === "move-down") {
-                                data.z = -moveAmount;
-                              } else if (control.key === "rotate-left") {
-                                data.rz = -moveAmount * 3.14;
-                              } else if (control.key === "rotate-right") {
-                                data.rz = moveAmount * 3.14;
-                              }
-
-                              // Apply speed scaling to all robot types
-                              data.x *= selectedSpeed;
-                              data.y *= selectedSpeed;
-                              data.z *= selectedSpeed;
-                              data.rx *= selectedSpeed;
-                              data.ry *= selectedSpeed;
-                              data.rz *= selectedSpeed;
-
-                              postData(BASE_URL + "move/relative", data, {
-                                robot_id: robotIDFromName(selectedRobotName),
-                              });
-                            }
-                          }}
+                          analogValue={
+                            control.type.startsWith("analog") 
+                              ? getCombinedAnalogValue(control.key)
+                              : undefined
+                          }
                         />
-                      </div>
-                    )}
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{control.description}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ))}
+                      )}
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{control.description}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
 
-      {gamepadConnected && <GamepadVisualizer gamepadIndex={gamepadIndex} />}
+      {/* Show gamepad visualizers for active configurations when moving */}
+      {isMoving && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-x-2">
+              <Gamepad2 className="size-4" />
+              Active Controller States
+            </CardTitle>
+            <CardDescription>
+              Real-time controller input visualization for active configurations
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Accordion type="multiple" className="w-full">
+              {configMode === "individual" ? (
+                controllerArmPairs
+                  .filter(pair => pair.controller_index !== null && pair.robot_name !== null)
+                  .map((pair, index) => (
+                    <AccordionItem 
+                      key={`visualizer-individual-${pair.controller_index}`} 
+                      value={`individual-${index}`}
+                    >
+                      <AccordionTrigger className="hover:no-underline">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span className="font-medium">
+                              {pair.robot_name} (ID: {robotIDFromName(pair.robot_name)})
+                            </span>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            → Controller {(pair.controller_index ?? 0) + 1}
+                          </div>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <GamepadVisualizer gamepadIndex={pair.controller_index} />
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))
+              ) : (
+                multiArmGroups
+                  .filter(group => group.controller_index !== null && group.robot_names.length > 0)
+                  .map((group) => (
+                    <AccordionItem 
+                      key={`visualizer-group-${group.id}`} 
+                      value={`group-${group.id}`}
+                    >
+                      <AccordionTrigger className="hover:no-underline">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                            <span className="font-medium">{group.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span>→ Controller {(group.controller_index ?? 0) + 1}</span>
+                            <Badge variant="secondary" className="text-xs">
+                              {group.control_mode}
+                            </Badge>
+                            {group.control_mode === 'sequential' && (
+                              <Badge variant="outline" className="text-xs">
+                                Active: {group.robot_names[group.active_robot_index]}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="font-medium">Control Mode:</span>
+                              <span className="ml-2 capitalize">{group.control_mode}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium">Robot Count:</span>
+                              <span className="ml-2">{group.robot_names.length}</span>
+                            </div>
+                          </div>
+                          
+                          {group.control_mode === 'sequential' && (
+                            <div className="p-2 bg-blue-50 dark:bg-blue-950 rounded text-sm">
+                              <span className="font-medium">Currently Active:</span>
+                              <span className="ml-2">{group.robot_names[group.active_robot_index]}</span>
+                              <span className="ml-2 text-muted-foreground">
+                                (Press Select/Back to switch)
+                              </span>
+                            </div>
+                          )}
+                          
+                          <div>
+                            <span className="font-medium text-sm">Controlled Robots:</span>
+                            <div className="mt-1 flex flex-wrap gap-2">
+                              {group.robot_names.map((robotName, robotIndex) => (
+                                <Badge 
+                                  key={robotName} 
+                                  variant={
+                                    group.control_mode === 'sequential' && robotIndex === group.active_robot_index 
+                                      ? "default" 
+                                      : "secondary"
+                                  }
+                                  className="text-xs"
+                                >
+                                  {robotName} (ID: {robotIDFromName(robotName)})
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                          
+                          <GamepadVisualizer gamepadIndex={group.controller_index} />
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))
+              )}
+            </Accordion>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
