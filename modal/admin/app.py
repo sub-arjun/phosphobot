@@ -943,8 +943,17 @@ def fastapi_app():
                 return {"status": "ok"}
 
             if checkout_session.payment_status != "unpaid":
+                # Check if the user already exists in the users table.
+                # This is not the default supabase auth.users table, but the public.users table
+                user_data = (
+                    supabase_client.table("users")
+                    .select("*")
+                    .eq("id", supabase_user_id)
+                    .execute()
+                )
                 # If the user already exists, update the plan to pro, add the stripe customer id and the subscription id
-                if supabase_user_id:
+                if user_data.data:
+                    # User exists, update the plan to pro
                     supabase_client.table("users").update(
                         {
                             "plan": "pro",
@@ -963,13 +972,92 @@ def fastapi_app():
                             "stripe_subscription_id": checkout_session.subscription,
                         }
                     ).execute()
-
                     logger.info(f"Created new user {supabase_user_email} with plan pro")
-
             else:
                 logger.warning(
                     "Received a checkout session with payment status unpaid!"
                 )
+
+        elif event["type"] == "customer.subscription.deleted":
+            # Handle subscription cancellation/deletion
+            subscription = event["data"]["object"]
+            subscription_id = subscription["id"]
+            customer_id = subscription["customer"]
+            logger.error(
+                f"Processing subscription deletion for subscription_id: {subscription_id} customer_id: {customer_id}"
+            )
+
+            # Find the user by stripe_subscription_id
+            user_data = (
+                supabase_client.table("users")
+                .select("*")
+                .eq("stripe_subscription_id", subscription_id)
+                .execute()
+            )
+
+            if user_data.data:
+                user = user_data.data[0]
+                user_id = user["id"]
+
+                # Update the user's plan back to free and clear subscription data
+                supabase_client.table("users").update({"plan": "free"}).eq(
+                    "id", user_id
+                ).execute()
+
+                logger.info(
+                    f"Updated user {user_id} plan to free due to subscription cancellation"
+                )
+            else:
+                logger.warning(f"No user found with subscription_id: {subscription_id}")
+
+        elif event["type"] == "customer.subscription.updated":
+            # Handle subscription updates (e.g., plan changes, status changes)
+            subscription = event["data"]["object"]
+            subscription_id = subscription["id"]
+            subscription_status = subscription["status"]
+            customer_id = subscription["customer"]
+            logger.error(
+                f"Processing subscription update for subscription_id: {subscription_id}, new status: {subscription_status}"
+            )
+
+            # Find the user by customer ID
+            user_data = (
+                supabase_client.table("users")
+                .select("*")
+                .eq("stripe_customer_id", customer_id)
+                .execute()
+            )
+
+            if user_data.data:
+                user = user_data.data[0]
+                user_id = user["id"]
+
+                # Handle different subscription statuses
+                if subscription_status in ["canceled", "unpaid", "past_due"]:
+                    # Downgrade to free plan
+                    supabase_client.table("users").update(
+                        {
+                            "plan": "free",
+                        }
+                    ).eq("id", user_id).execute()
+
+                    logger.info(
+                        f"Updated user {user_id} plan to free due to subscription status: {subscription_status}"
+                    )
+
+                elif subscription_status == "active":
+                    # Ensure user has pro plan
+                    supabase_client.table("users").update(
+                        {
+                            "plan": "pro",
+                        }
+                    ).eq("id", user_id).execute()
+
+                    logger.info(
+                        f"Updated user {user_id} plan to pro due to active subscription"
+                    )
+            else:
+                logger.error(f"No user found with subscription_id: {subscription_id}")
 
         return {"status": "ok"}
 
