@@ -73,7 +73,7 @@ class SO100Hardware(BaseManipulator):
 
     _gravity_task: Optional[asyncio.Task] = None
 
-    _max_temperature_cache: dict = {}
+    
 
     @property
     def servo_id_to_motor_name(self):
@@ -107,6 +107,7 @@ class SO100Hardware(BaseManipulator):
         self.motors_bus.connect()
         self.is_connected = True
         self.init_config()
+        self._max_temperature_cache: dict = {}
 
     def disconnect(self):
         """
@@ -364,9 +365,11 @@ class SO100Hardware(BaseManipulator):
         values = maximum_temperature_target
         motor_names = list(self.motors.keys())
         try:
+            self.motors_bus.write("Lock", values=[0]*len(motor_names), motor_names=motor_names)
             self.motors_bus.write(
                 "Max_Temperature_Limit", values=values, motor_names=motor_names
             )
+            self.motors_bus.write("Lock", values=[1]*len(motor_names), motor_names=motor_names)
             self._max_temperature_cache = {}
             self.motor_communication_errors = 0
         except Exception as e:
