@@ -324,7 +324,8 @@ class KochHardware(BaseManipulator):
         """
         if not self.is_connected:
             logger.warning("KochHardware: Not connected. Run .connect() first.")
-            return
+            return np.full(len(self.SERVO_IDS), np.nan)
+
         # Create a Sync Read group for present position (4 bytes per motor)
         groupSyncRead = GroupSyncRead(
             self.portHandler, self.packetHandler, self.ADDR_PRESENT_POSITION, 4
@@ -368,7 +369,7 @@ class KochHardware(BaseManipulator):
         """
         if not self.is_connected:
             logger.warning("KochHardware: Not connected. Run .connect() first.")
-            return
+            return None
 
         try:
             (
@@ -399,7 +400,7 @@ class KochHardware(BaseManipulator):
         """
         if not self.is_connected:
             logger.warning("KochHardware: Not connected. Run .connect() first.")
-            return
+            return None
 
         try:
             (
