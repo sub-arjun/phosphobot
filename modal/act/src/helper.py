@@ -1,13 +1,12 @@
-### This file is a copy of our script to compute meta files for a dataset
-
 import json
 import os
 import shutil
 from copy import deepcopy
 from math import ceil
 from pathlib import Path
-from typing import Optional, Tuple, Dict
+from typing import Optional, Dict
 
+import av
 import cv2
 import einops
 import numpy as np
@@ -573,6 +572,31 @@ def decode_video_frames_torchvision(
     return closest_frames
 
 
+def read_first_frame_with_pyav(video_path):
+    """
+    Read the first frame from a video file using PyAV library.
+    Returns the frame as a numpy array or None if failed.
+    """
+    try:
+        container = av.open(str(video_path))
+        video_stream = container.streams.video[0]
+
+        for frame in container.decode(video_stream):
+            # Convert to RGB numpy array
+            img = frame.to_rgb().to_ndarray()
+            container.close()
+            return img
+
+    except Exception as e:
+        logger.error(f"PyAV failed to read {video_path}: {e}")
+        return None
+    finally:
+        try:
+            container.close()
+        except:
+            pass
+
+
 def compute_bboxes(
     dataset_root_path: Path,
     detect_instruction: str,
@@ -661,9 +685,9 @@ Please specify one of the following video keys when launching a training: {", ".
         # Last batch is handled thanks to the min condition
         chunck_size = min(max_batch_size, validated_info.total_episodes - cursor)
         chunck_episodes = range(cursor, cursor + chunck_size)
-
         # Load the first frame of each episode in the batch
         frames = []
+
         for episode_index in chunck_episodes:
             video_path = (
                 new_dataset_path
@@ -679,21 +703,20 @@ Please specify one of the following video keys when launching a training: {", ".
                 )
                 episodes_to_delete.append(episode_index)
                 continue
-            video_capture = cv2.VideoCapture(str(video_path))
-            if not video_capture.isOpened():
-                logger.error(f"Failed to open video file: {video_path}")
-                episodes_to_delete.append(episode_index)
-                continue
-            # Read the first frame
-            ret, frame = video_capture.read()
-            video_capture.release()
-            if not ret:
+
+            # Read the first frame using PyAV
+            frame = read_first_frame_with_pyav(video_path)
+
+            if frame is None:
                 logger.error(f"Failed to read the first frame of video: {video_path}")
                 episodes_to_delete.append(episode_index)
                 continue
+
             # Resize the frame to 224x224 (PaliGemma expects this size)
             frame = cv2.resize(frame, (224, 224), interpolation=cv2.INTER_LINEAR)
-            frames.append(frame[..., ::-1])  # Convert BGR to RGB
+
+            # PyAV already returns RGB format, so no need to convert BGR to RGB
+            frames.append(frame[..., ::-1])
 
         # Call PaliGemma to compute the bounding box with the frames
         logger.info(
@@ -726,7 +749,6 @@ Please specify one of the following video keys when launching a training: {", ".
                 f"Saved bounding box {bbox} for episode {current_episode_index} in {parquet_file_path}"
             )
 
-        # Update the cursor
         cursor += chunck_size
 
     # Debug: list all the parquet files in the dataset
