@@ -34,6 +34,12 @@ MIN_NUMBER_OF_BBOXES = 10
 MAX_BATCH_SIZE = 140
 
 
+class NotEnoughBBoxesError(Exception):
+    """Custom exception for when not enough bounding boxes are detected."""
+
+    pass
+
+
 class ParquetEpisodesDataset(TorchDataset):
     """Custom Dataset for loading parquet files from a directory with video frame caching."""
 
@@ -738,7 +744,7 @@ Please specify one of the following video keys when launching a training: {", ".
             visualizer_url = (
                 f"https://lerobot-visualize-dataset.hf.space/{dataset_name}/"
             )
-            raise RuntimeError(
+            raise NotEnoughBBoxesError(
                 f"The object '{detect_instruction}' was detected in {validated_info.total_episodes - len(episodes_to_delete)} episodes in {image_key} camera"
                 f" (should be: {MIN_NUMBER_OF_BBOXES} episodes min)."
                 f" This is not enough to train a model. Check your dataset: {visualizer_url} and rephrase the instruction."

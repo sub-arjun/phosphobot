@@ -7,6 +7,7 @@ from typing import Any
 
 import cv2
 import numpy as np
+import sentry_sdk
 import wandb
 from fastapi import Response
 from huggingface_hub import HfApi, snapshot_download
@@ -25,7 +26,13 @@ from phosphobot.am.base import (
 from phosphobot.models import InfoModel
 from phosphobot.models.lerobot_dataset import LeRobotDataset
 
-MIN_NUMBER_OF_EPISODES = 10
+
+if os.getenv("MODAL_ENVIRONMENT") == "production":
+    sentry_sdk.init(
+        dsn="https://afa38885e368d772d8eced1bce325604@o4506399435325440.ingest.us.sentry.io/4509203019005952",
+        traces_sample_rate=1.0,
+        environment="production",
+    )
 
 phosphobot_dir = (
     Path(__file__).parent.parent.parent.parent.parent / "phosphobot" / "phosphobot"
@@ -81,6 +88,8 @@ FUNCTION_TIMEOUT_INFERENCE = 6 * MINUTES  # 6 minutes
 FUNCTION_GPU_TRAINING: list[str | modal.gpu._GPUConfig | None] = ["A10G"]
 FUNCTION_GPU_INFERENCE: list[str | modal.gpu._GPUConfig | None] = ["T4"]
 FUNCTION_CPU_TRAINING = 20.0
+MIN_NUMBER_OF_EPISODES = 10
+
 
 app = modal.App("act-server")
 act_volume = modal.Volume.from_name("act", create_if_missing=True)
@@ -638,8 +647,8 @@ def train(  # All these args should be verified in phosphobot
     **kwargs,
 ):
     from datetime import datetime, timezone
-
     from supabase import Client, create_client
+    from .helper import NotEnoughBBoxesError
 
     SUPABASE_URL = os.environ["SUPABASE_URL"]
     SUPABASE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
@@ -937,7 +946,38 @@ def train(  # All these args should be verified in phosphobot
             repo_id=model_name,
             token=hf_token,
         )
+    except NotEnoughBBoxesError as e:
+        logger.warning(
+            f"NotEnoughBBoxesError during training {training_id} for {dataset_name}: {e}"
+        )
+        # Update the training status in Supabase
+        supabase_client.table("trainings").update(
+            {
+                "status": "failed",
+                "terminated_at": datetime.now(timezone.utc).isoformat(),
+                "error_message": str(e),
+            }
+        ).eq("id", training_id).execute()
 
+        readme = generate_readme(
+            model_type="act",
+            dataset_repo_id=dataset_name,
+            folder_path=output_dir,
+            wandb_run_url=wandb_run_url,
+            steps=training_params.steps,
+            epochs=None,
+            batch_size=training_params.batch_size,
+            error_traceback=str(e),
+            return_readme_as_bytes=True,
+        )
+        hf_api = HfApi(token=hf_token)
+        hf_api.upload_file(
+            repo_type="model",
+            path_or_fileobj=readme,
+            path_in_repo="README.md",
+            repo_id=model_name,
+            token=hf_token,
+        )
     except Exception as e:
         logger.error(f"🚨 ACT Training {training_id} for {dataset_name} failed: {e}")
 
