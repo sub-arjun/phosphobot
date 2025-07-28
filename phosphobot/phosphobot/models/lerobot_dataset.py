@@ -1404,9 +1404,10 @@ class LeRobotEpisode(BaseEpisode):
         for step in self.steps:
             if step.action is None or np.isnan(step.action).any():
                 # Attempt to repair the action by using the observation's joints_position
-                if step.observation.joints_position is not None and not np.isnan(
-                    step.observation.joints_position
-                ).any():
+                if (
+                    step.observation.joints_position is not None
+                    and not np.isnan(step.observation.joints_position).any()
+                ):
                     logger.warning(
                         f"Action in episode {self.episode_index} is None or NaN, automatically filling in the value."
                     )
@@ -2452,6 +2453,15 @@ class Stats(BaseModel):
         """
         Compute the mean and std from the rolling sum and square sum for images.
         """
+
+        if self.count == 0:
+            logger.error("Count is 0. Cannot compute mean and std for images.")
+            return
+
+        if self.sum is None or self.square_sum is None:
+            # We have already computed the mean and std
+            return
+
         self.mean = self.sum / self.count
         self.std = np.sqrt(self.square_sum / self.count - self.mean**2)
         # We want .tolist() to yield [[[mean_r, mean_g, mean_b]]] and not [mean_r, mean_g, mean_b]
