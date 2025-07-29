@@ -1328,16 +1328,13 @@ class Gr00tTrainer(BaseTrainer):
 
             # Also upload checkpoint directories if they exist, named as "checkpoint-<number>"
             for item in files_directory.glob("checkpoint-*"):
+                logger.debug(f"Found checkpoint item: {item}")
                 if item.is_dir():
                     # Upload the entire directory structure
                     for sub_item in item.glob("**/*"):
+                        logger.debug(f"Found sub-item in checkpoint: {sub_item}")
                         if sub_item.is_file():
                             logger.info(f"Uploading file: {sub_item}")
-                            # if the path starts with tmp/ we skip it
-                            if sub_item.as_posix().startswith(
-                                "tmp/"
-                            ) or sub_item.as_posix().startswith("/tmp/"):
-                                continue
                             # Parse the checkpoint number as an int
                             try:
                                 # Should be 100, 400, etc.
