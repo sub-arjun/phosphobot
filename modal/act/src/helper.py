@@ -622,6 +622,23 @@ def compute_bboxes(
     dataset = LeRobotDataset(path=str(dataset_root_path), enforce_path=False)
     dataset.load_meta_models()
 
+    # Ensure the image key exists in the dataset, if not, fail fast
+    image_key_detected = False
+    if dataset.info_model is not None:
+        for meta_image_key in dataset.info_model.features.observation_images.keys():
+            if image_key in meta_image_key:
+                image_key_detected = True
+                break
+
+    if not image_key_detected:
+        if dataset.info_model is None:
+            raise ValueError("Dataset could not be loaded correctly.")
+        raise ValueError(
+            f"Image key '{image_key}' not found in the dataset info_model. "
+            "Please check the image keys in the dataset and pass the appropriate parameter.\n"
+            f"Available image keys: {list(dataset.info_model.features.observation_images.keys())}"
+        )
+
     # Copy the dataset to a new folder
     new_dataset_path = dataset_root_path.parent / f"{dataset_root_path.name}_bboxes"
     if new_dataset_path.exists():
