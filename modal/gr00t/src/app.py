@@ -65,7 +65,7 @@ MINUTES = 60  # seconds
 HOURS = 60 * MINUTES  # seconds
 FUNCTION_IMAGE = gr00t_image
 FUNCTION_GPU: list[str | modal.gpu._GPUConfig | None] = ["A100-40GB", "L40S"]
-FUNCTION_TIMEOUT = 8 * MINUTES  # 2 extra minutes for the policy to load
+FUNCTION_TIMEOUT = 8 * MINUTES
 TRAINING_TIMEOUT = 12 * HOURS
 
 app = modal.App("gr00t-server")
@@ -500,8 +500,8 @@ def _upload_partial_checkpoint_gr00t(
 @app.function(
     image=FUNCTION_IMAGE,
     gpu="A100-80GB",
-    # 10 extra minutes to make sure the rest of the pipeline is done
-    timeout=TRAINING_TIMEOUT + 10 * MINUTES,
+    # 15 extra minutes to make sure the rest of the pipeline is done
+    timeout=TRAINING_TIMEOUT + 15 * MINUTES,
     # Added for debugging
     secrets=[
         modal.Secret.from_dict({"MODAL_LOGLEVEL": "DEBUG"}),
@@ -537,7 +537,9 @@ def train(  # All these args should be verified in phosphobot
     if hf_token is None:
         raise ValueError("HF_TOKEN is not set")
 
-    logger.info(f"🚀 Training {dataset_name} with id {training_id}")
+    logger.info(
+        f"🚀 Training {dataset_name} with id {training_id} and uploading to: {model_name}"
+    )
 
     try:
         predictor.predict(
