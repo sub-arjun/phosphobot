@@ -121,6 +121,11 @@ export function AIControlPage() {
     }
   }, [serverStatus]);
 
+  useEffect(() => {
+    setModelId("");
+    setSelectedCheckpoint(null);
+  }, [selectedModelType, setModelId, setSelectedCheckpoint]);
+
   const startControlByAI = async () => {
     if (
       serverStatus?.robot_status?.length === 1 &&
@@ -293,6 +298,7 @@ export function AIControlPage() {
                     onValueChange={(option: Option) => {
                       setModelId(option.value);
                     }}
+                    key={selectedModelType}
                     placeholder="nvidia/GR00T-N1.5-3B"
                     className="w-full"
                     disabled={aiStatus?.status !== "stopped"}
@@ -423,6 +429,7 @@ export function AIControlPage() {
                     disabled={
                       aiStatus?.status !== "stopped" ||
                       !modelId.trim() ||
+                      !modelConfiguration ||
                       (!prompt.trim() &&
                         modelsThatRequirePrompt.includes(selectedModelType))
                     }
