@@ -73,8 +73,6 @@ class SO100Hardware(BaseManipulator):
 
     _gravity_task: Optional[asyncio.Task] = None
 
-    
-
     @property
     def servo_id_to_motor_name(self):
         return {v[0]: k for k, v in self.motors.items()}
@@ -365,11 +363,15 @@ class SO100Hardware(BaseManipulator):
         values = maximum_temperature_target
         motor_names = list(self.motors.keys())
         try:
-            self.motors_bus.write("Lock", values=[0]*len(motor_names), motor_names=motor_names)
+            self.motors_bus.write(
+                "Lock", values=[0] * len(motor_names), motor_names=motor_names
+            )
             self.motors_bus.write(
                 "Max_Temperature_Limit", values=values, motor_names=motor_names
             )
-            self.motors_bus.write("Lock", values=[1]*len(motor_names), motor_names=motor_names)
+            self.motors_bus.write(
+                "Lock", values=[1] * len(motor_names), motor_names=motor_names
+            )
             self._max_temperature_cache = {}
             self.motor_communication_errors = 0
         except Exception as e:
@@ -490,6 +492,17 @@ class SO100Hardware(BaseManipulator):
                 return (
                     "error",
                     "Calibration failed: joint positions are NaN. Please check that every wire of the robot is plugged correctly.",
+                )
+
+            # If any of the joint positions are the same as the offsets, we cannot continue
+            if np.any(
+                np.array(self.config.servos_calibration_position)
+                == np.array(self.config.servos_offsets)
+            ):
+                self.calibration_current_step = 0
+                return (
+                    "error",
+                    "Calibration failed: joint positions are the same as the offsets. Please check that every wire of the robot is plugged correctly.",
                 )
 
             self.config.servos_offsets_signs = np.sign(
