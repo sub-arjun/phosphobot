@@ -39,6 +39,12 @@ class NotEnoughBBoxesError(Exception):
     pass
 
 
+class InvalidInputError(Exception):
+    """Custom exception for invalid input data."""
+
+    pass
+
+
 class ParquetEpisodesDataset(TorchDataset):
     """Custom Dataset for loading parquet files from a directory with video frame caching."""
 
@@ -633,7 +639,7 @@ def compute_bboxes(
     if not image_key_detected:
         if dataset.info_model is None:
             raise ValueError("Dataset could not be loaded correctly.")
-        raise ValueError(
+        raise InvalidInputError(
             f"Image key '{image_key}' not found in the dataset info_model. "
             "Please check the image keys in the dataset and pass the appropriate parameter.\n"
             f"Available image keys: {list(dataset.info_model.features.observation_images.keys())}"

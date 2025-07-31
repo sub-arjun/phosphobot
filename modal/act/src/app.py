@@ -648,7 +648,7 @@ def train(  # All these args should be verified in phosphobot
 ):
     from datetime import datetime, timezone
     from supabase import Client, create_client
-    from .helper import NotEnoughBBoxesError
+    from .helper import NotEnoughBBoxesError, InvalidInputError
 
     SUPABASE_URL = os.environ["SUPABASE_URL"]
     SUPABASE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
@@ -916,41 +916,9 @@ def train(  # All these args should be verified in phosphobot
             }
         ).eq("id", training_id).execute()
 
-    except HFValidationError as e:
+    except (HFValidationError, NotEnoughBBoxesError, InvalidInputError) as e:
         logger.warning(
-            f"HFValidationError during training {training_id} for {dataset_name}: {e}"
-        )
-        # Update the training status in Supabase
-        supabase_client.table("trainings").update(
-            {
-                "status": "failed",
-                "terminated_at": datetime.now(timezone.utc).isoformat(),
-                "error_message": str(e),
-            }
-        ).eq("id", training_id).execute()
-
-        readme = generate_readme(
-            model_type="act",
-            dataset_repo_id=dataset_name,
-            folder_path=output_dir,
-            wandb_run_url=wandb_run_url,
-            steps=training_params.steps,
-            epochs=None,
-            batch_size=training_params.batch_size,
-            error_traceback=str(e),
-            return_readme_as_bytes=True,
-        )
-        hf_api = HfApi(token=hf_token)
-        hf_api.upload_file(
-            repo_type="model",
-            path_or_fileobj=readme,
-            path_in_repo="README.md",
-            repo_id=model_name,
-            token=hf_token,
-        )
-    except NotEnoughBBoxesError as e:
-        logger.warning(
-            f"NotEnoughBBoxesError during training {training_id} for {dataset_name}: {e}"
+            f"{type(e).__name__} during training {training_id} for {dataset_name}: {e}"
         )
         # Update the training status in Supabase
         supabase_client.table("trainings").update(
