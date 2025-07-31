@@ -5,7 +5,7 @@ from typing import List, Literal, Optional, Union
 
 import numpy as np
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from serial.tools.list_ports_common import ListPortInfo
 
 from phosphobot.utils import get_home_app_path
@@ -202,6 +202,29 @@ class BaseRobotConfig(BaseModel):
         description="Torque threshold to consider an object not gripped. This will allow the gripper to move freely.",
     )
 
+    @model_validator(mode="after")
+    def validate_servos_arrays(self) -> "BaseRobotConfig":
+        """Validate that servos_offsets and servos_calibration_position have same length
+        and different values at each position"""
+        if len(self.servos_offsets) != len(self.servos_calibration_position):
+            raise ValueError(
+                f"servos_offsets (length {len(self.servos_offsets)}) and "
+                f"servos_calibration_position (length {len(self.servos_calibration_position)}) "
+                f"must have the same length"
+            )
+
+        # Check that corresponding elements are different
+        for i, (offset, cal_pos) in enumerate(
+            zip(self.servos_offsets, self.servos_calibration_position)
+        ):
+            if offset == cal_pos:
+                raise ValueError(
+                    f"servos_offsets[{i}] ({offset}) must be different from "
+                    f"servos_calibration_position[{i}] ({cal_pos})"
+                )
+
+        return self
+
     @classmethod
     def from_json(cls, filepath: str) -> Union["BaseRobotConfig", None]:
         """
@@ -255,9 +278,9 @@ class BaseRobotConfig(BaseModel):
             The path to the saved file
         """
         filename = f"{self.name}_{serial_id}_config.json"
-        assert (
-            "/" not in filename
-        ), "Filename cannot contain '/'. Did you pass a device_name instead of SERIAL_ID?"
+        assert "/" not in filename, (
+            "Filename cannot contain '/'. Did you pass a device_name instead of SERIAL_ID?"
+        )
         filepath = str(get_home_app_path() / "calibration" / filename)
         logger.info(f"Saving configuration to {filepath}")
         self.to_json(filepath)
