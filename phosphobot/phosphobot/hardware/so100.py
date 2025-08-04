@@ -449,7 +449,6 @@ class SO100Hardware(BaseManipulator):
             )
 
         if self.calibration_current_step == 1:
-            await self.connect()
             # Set the offset to the middle of the motor range
             self.calibrate_motors()
             self.config.servos_offsets = self.read_joints_position(
