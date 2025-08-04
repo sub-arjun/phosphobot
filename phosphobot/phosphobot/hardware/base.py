@@ -213,9 +213,9 @@ class BaseManipulator(BaseRobot):
 
         # When creating a new robot, you should add default values for these
         # These values depends on the hardware
-        assert self.CALIBRATION_POSITION is not None, (
-            "CALIBRATION_POSITION must be defined in the class"
-        )
+        assert (
+            self.CALIBRATION_POSITION is not None
+        ), "CALIBRATION_POSITION must be defined in the class"
         assert self.RESOLUTION is not None, "RESOLUTION must be defined in the class"
         assert self.SERVO_IDS is not None, "SERVO_IDS must be defined in the class"
 
@@ -1093,15 +1093,15 @@ class BaseManipulator(BaseRobot):
         """
 
         from phosphobot.endpoints.control import (
-            ai_control_signal,
-            leader_follower_control,
-            vr_control_signal,
+            signal_ai_control,
+            signal_leader_follower,
+            signal_vr_control,
         )
 
         if (
-            ai_control_signal.is_in_loop()
-            or leader_follower_control.is_in_loop()
-            or vr_control_signal.is_in_loop()
+            signal_ai_control.is_in_loop()
+            or signal_leader_follower.is_in_loop()
+            or signal_vr_control.is_in_loop()
         ):
             joints_position = self.read_joints_position(unit="rad", source="sim")
         else:

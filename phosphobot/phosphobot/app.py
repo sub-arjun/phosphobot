@@ -86,19 +86,19 @@ async def lifespan(app: FastAPI):
         udp_server.stop()
 
         from phosphobot.endpoints.control import (
-            ai_control_signal,
-            gravity_control,
-            leader_follower_control,
+            signal_ai_control,
+            signal_gravity_control,
+            signal_leader_follower,
         )
 
-        if ai_control_signal.is_in_loop():
-            ai_control_signal.stop()
+        if signal_ai_control.is_in_loop():
+            signal_ai_control.stop()
             logger.info("AI control signal stopped")
-        if gravity_control.is_in_loop():
-            gravity_control.stop()
+        if signal_gravity_control.is_in_loop():
+            signal_gravity_control.stop()
             logger.info("Gravity control signal stopped")
-        if leader_follower_control.is_in_loop():
-            leader_follower_control.stop()
+        if signal_leader_follower.is_in_loop():
+            signal_leader_follower.stop()
             logger.info("Leader follower control signal stopped")
 
         cameras = get_all_cameras_no_init()
@@ -177,8 +177,8 @@ async def status(
     Get the status of the server.
     """
     from phosphobot.endpoints.control import (
-        ai_control_signal,
-        leader_follower_control,
+        signal_ai_control,
+        signal_leader_follower,
     )
 
     robots = await rcm.robots
@@ -192,8 +192,8 @@ async def status(
         robot_status=await rcm.status(),
         cameras=cameras.status(),
         is_recording=recorder.is_recording or recorder.is_saving,
-        ai_running_status=ai_control_signal.status,
-        leader_follower_status=leader_follower_control.is_in_loop(),
+        ai_running_status=signal_ai_control.status,
+        leader_follower_status=signal_leader_follower.is_in_loop(),
         server_ip=get_local_ip(),
         server_port=config.PORT,
     )

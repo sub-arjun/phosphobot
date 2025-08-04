@@ -72,10 +72,10 @@ router = APIRouter(tags=["control"])
 
 
 # Object that controls the global /auto, /gravity state in a thread safe way
-ai_control_signal = CustomAIControlSignal()
-gravity_control = ControlSignal()
-leader_follower_control = ControlSignal()
-vr_control_signal = ControlSignal()
+signal_ai_control = CustomAIControlSignal()
+signal_gravity_control = ControlSignal()
+signal_leader_follower = ControlSignal()
+signal_vr_control = ControlSignal()
 
 
 @router.post(
@@ -125,7 +125,7 @@ async def move_teleop_ws(
 
     await websocket.accept()
 
-    vr_control_signal.start()
+    signal_vr_control.start()
     try:
         while True:
             data = await websocket.receive_text()
@@ -139,7 +139,7 @@ async def move_teleop_ws(
     except WebSocketDisconnect:
         logger.warning("WebSocket client disconnected")
 
-    vr_control_signal.stop()
+    signal_vr_control.stop()
 
 
 @router.post("/move/teleop/udp", response_model=UDPServerInformationResponse)
@@ -811,7 +811,7 @@ async def start_leader_follower(
     The first robot is the leader with gravity compensation enabled,
     and the second robot follows the leader's joint positions.
     """
-    if leader_follower_control.is_in_loop():
+    if signal_leader_follower.is_in_loop():
         raise HTTPException(
             status_code=400,
             detail="Leader-follower control is already running. Call /move/leader/stop first.",
@@ -866,13 +866,13 @@ async def start_leader_follower(
         robot_pairs.append(RobotPair(leader=leader, follower=follower))
 
     # Create control signal for managing the leader-follower operation
-    leader_follower_control.start()
+    signal_leader_follower.start()
 
     # Add background task to run the control loop
     background_tasks.add_task(
         background_task_log_exceptions(leader_follower_loop),
         robot_pairs=robot_pairs,
-        control_signal=leader_follower_control,
+        control_signal=signal_leader_follower,
         invert_controls=request.invert_controls,
         enable_gravity_compensation=request.enable_gravity_compensation,
         compensation_values=request.gravity_compensation_values,
@@ -893,12 +893,12 @@ async def stop_leader_follower(
     """
     Stop the leader-follower
     """
-    if not leader_follower_control.is_in_loop():
+    if not signal_leader_follower.is_in_loop():
         return StatusResponse(
             status="error", message="Leader-follower control is not running"
         )
 
-    leader_follower_control.stop()
+    signal_leader_follower.stop()
     return StatusResponse(message="Stopping leader-follower control")
 
 
@@ -911,7 +911,7 @@ async def start_gravity(
     """
     Enable gravity compensation for the robot.
     """
-    if gravity_control.is_in_loop():
+    if signal_gravity_control.is_in_loop():
         raise HTTPException(
             status_code=400, detail="Gravity control is already running"
         )
@@ -925,12 +925,12 @@ async def start_gravity(
             status_code=400, detail="Gravity compensation is only for SO-100 robot"
         )
 
-    gravity_control.start()
+    signal_gravity_control.start()
 
     # Add background task to run the control loop
     background_tasks.add_task(
         background_task_log_exceptions(robot.gravity_compensation_loop),
-        control_signal=gravity_control,
+        control_signal=signal_gravity_control,
     )
     return StatusResponse()
 
@@ -947,10 +947,10 @@ async def stop_gravity_compensation(
     """
     Stop the gravity compensation for all robots.
     """
-    if not gravity_control.is_in_loop():
+    if not signal_gravity_control.is_in_loop():
         return StatusResponse(status="error", message="Gravity control is not running")
 
-    gravity_control.stop()
+    signal_gravity_control.stop()
     return StatusResponse(message="Stopping gravity control")
 
 
@@ -964,7 +964,7 @@ async def fetch_auto_control_status() -> AIStatusResponse:
     """
     Fetch the status of the auto control by AI
     """
-    return AIStatusResponse(id=ai_control_signal.id, status=ai_control_signal.status)
+    return AIStatusResponse(id=signal_ai_control.id, status=signal_ai_control.status)
 
 
 @router.post(
@@ -1011,7 +1011,7 @@ async def spawn_inference_server(
         model_id=query.model_id,
         init_connected_robots=False,
         model_type=query.model_type,
-        ai_control_signal_id=ai_control_signal.id,
+        ai_control_signal_id=signal_ai_control.id,
     )
 
     return SpawnStatusResponse(message="ok", server_info=server_info)
@@ -1023,7 +1023,7 @@ async def spawn_inference_server(
     summary="Start the auto control by AI",
     description="Start the auto control by AI.",
 )
-async def start_auto_control(
+async def start_ai_control(
     query: StartAIControlRequest,
     background_tasks: BackgroundTasks,
     rcm: RobotConnectionManager = Depends(get_rcm),
@@ -1033,17 +1033,29 @@ async def start_auto_control(
     """
     Start the auto control by AI
     """
-    if ai_control_signal.is_in_loop():
+
+    if signal_leader_follower.is_in_loop():
+        raise HTTPException(
+            status_code=400,
+            detail="Leader-follower control is running. Stop it before starting AI control.",
+        )
+    if signal_gravity_control.is_in_loop():
+        raise HTTPException(
+            status_code=400,
+            detail="Gravity compensation is running. Stop it before starting AI control.",
+        )
+
+    if signal_ai_control.is_in_loop():
         return AIControlStatusResponse(
             status="error",
             message="Auto control is already running",
-            ai_control_signal_id=ai_control_signal.id,
-            ai_control_signal_status=ai_control_signal.status,
+            ai_control_signal_id=signal_ai_control.id,
+            ai_control_signal_status=signal_ai_control.status,
             server_info=None,
         )
 
-    ai_control_signal.new_id()
-    ai_control_signal.start()
+    signal_ai_control.new_id()
+    signal_ai_control.start()
 
     supabase_client = await get_client()
     user = await supabase_client.auth.get_user()
@@ -1053,7 +1065,7 @@ async def start_auto_control(
         supabase_client.table("ai_control_sessions")
         .upsert(
             {
-                "id": ai_control_signal.id,
+                "id": signal_ai_control.id,
                 "user_id": user.user.id,
                 "user_email": user.user.email,
                 "model_type": query.model_type,
@@ -1091,7 +1103,7 @@ async def start_auto_control(
         model_type=query.model_type,
         model_id=query.model_id,
         cameras_keys_mapping=query.cameras_keys_mapping,
-        ai_control_signal_id=ai_control_signal.id,
+        ai_control_signal_id=signal_ai_control.id,
         verify_cameras=query.verify_cameras,
         checkpoint=query.checkpoint,
     )
@@ -1105,14 +1117,14 @@ async def start_auto_control(
                 "server_id": server_info.server_id,
             }
         )
-        .eq("id", ai_control_signal.id)
+        .eq("id", signal_ai_control.id)
         .execute()
     )
 
     background_tasks.add_task(
         model.control_loop,
         robots=robots_to_control,
-        control_signal=ai_control_signal,
+        control_signal=signal_ai_control,
         prompt=query.prompt,
         all_cameras=all_cameras,
         model_spawn_config=model_spawn_config,
@@ -1124,9 +1136,9 @@ async def start_auto_control(
 
     return AIControlStatusResponse(
         status="ok",
-        message=f"Starting AI control with id: {ai_control_signal.id}",
+        message=f"Starting AI control with id: {signal_ai_control.id}",
         server_info=server_info,
-        ai_control_signal_id=ai_control_signal.id,
+        ai_control_signal_id=signal_ai_control.id,
         ai_control_signal_status="waiting",
     )
 
@@ -1137,7 +1149,7 @@ async def start_auto_control(
     summary="Stop the auto control by AI",
     description="Stop the auto control by AI.",
 )
-async def stop_auto_control(
+async def stop_ai_control(
     background_tasks: BackgroundTasks,
     rcm: RobotConnectionManager = Depends(get_rcm),
     session=Depends(user_is_logged_in),
@@ -1162,10 +1174,10 @@ async def stop_auto_control(
 
     background_tasks.add_task(stop_modal)
 
-    if not ai_control_signal.is_in_loop():
+    if not signal_ai_control.is_in_loop():
         return StatusResponse(message="Auto control is not running")
 
-    ai_control_signal.stop()
+    signal_ai_control.stop()
 
     return StatusResponse(message="Stopped AI control")
 
@@ -1176,16 +1188,16 @@ async def stop_auto_control(
     summary="Pause the auto control by AI",
     description="Pause the auto control by AI.",
 )
-async def pause_auto_control(
+async def pause_ai_control(
     rcm: RobotConnectionManager = Depends(get_rcm),
 ) -> StatusResponse:
     """
     Pause the auto control by AI
     """
-    if not ai_control_signal.is_in_loop():
+    if not signal_ai_control.is_in_loop():
         return StatusResponse(message="Auto control is not running")
 
-    ai_control_signal.status = "paused"
+    signal_ai_control.status = "paused"
     return StatusResponse(message="Pausing AI control")
 
 
@@ -1195,16 +1207,16 @@ async def pause_auto_control(
     summary="Resume the auto control by AI",
     description="Resume the auto control by AI.",
 )
-async def resume_auto_control(
+async def resume_ai_control(
     rcm: RobotConnectionManager = Depends(get_rcm),
 ) -> StatusResponse:
     """
     Resume the auto control by AI
     """
-    if ai_control_signal.status == "running":
+    if signal_ai_control.status == "running":
         return StatusResponse(message="AI control is already running")
 
-    ai_control_signal.status = "running"
+    signal_ai_control.status = "running"
     return StatusResponse(message="Resuming AI control")
 
 
@@ -1213,7 +1225,7 @@ async def resume_auto_control(
     response_model=StatusResponse,
     summary="Feedback about the auto control session",
 )
-async def feedback_auto_control(
+async def feedback_ai_control(
     request: FeedbackRequest,
     session=Depends(user_is_logged_in),
 ) -> StatusResponse:
