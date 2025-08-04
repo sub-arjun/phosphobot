@@ -569,6 +569,12 @@ async def merge_datasets(merge_request: MergeDatasetsRequest):
             new_dataset_name=merge_request.new_dataset_name,
             video_transform=merge_request.image_key_mappings,
         )
+    # if the dataset already exists, we raise an error
+    except FileExistsError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Dataset {merge_request.new_dataset_name} already exists: {e}",
+        )
     except Exception as e:
         logger.error(f"Error merging datasets: {e}")
         raise HTTPException(

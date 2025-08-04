@@ -468,30 +468,22 @@ export function BrowsePage() {
     setLoading(true);
     console.log("Merging datasets:", selectedItems);
 
-    try {
-      const response = await fetchWithBaseUrl(`/dataset/merge`, "POST", {
-        first_dataset: selectedItems[0],
-        second_dataset: selectedItems[1],
-        new_dataset_name: newDatasetName,
-        image_key_mappings: imageKeyMappings,
-      });
+    const data = await fetchWithBaseUrl(`/dataset/merge`, "POST", {
+      first_dataset: selectedItems[0],
+      second_dataset: selectedItems[1],
+      new_dataset_name: newDatasetName,
+      image_key_mappings: imageKeyMappings,
+    });
 
-      if (response.status !== "ok") {
-        toast.error("Failed to merge datasets");
-      } else {
-        toast.success("Episode merged successfully");
-        mutate();
-        redirect(path);
-      }
+    if (data) {
+      toast.success("Episode merged successfully");
+      mutate();
+      redirect(path);
       console.log("Merged datasets:", selectedItems);
-    } catch (error) {
-      toast.error("Failed to merge datasets");
-      console.error("Merge error:", error);
-    } finally {
-      // This ensures loading is set to false after the operation completes
-      setLoading(false);
-      setMergeModalOpen(false);
     }
+
+    setLoading(false);
+    setMergeModalOpen(false);
   };
 
   const handleRepairDataset = async () => {
