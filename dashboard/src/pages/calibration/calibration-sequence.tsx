@@ -253,7 +253,7 @@ export function CalibrationSequence() {
         calibrationStatus === "in_progress") && (
         <Alert
           variant={"default"}
-          className={`mb-6 ${calibrationStatus === "success" ? "bg-green-50 border-green-200" : ""}`}
+          className={`mb-6 ${calibrationStatus === "success" ? " border-green-500 border-2" : ""}`}
         >
           {calibrationStatus === "success" ? (
             <CheckCircle className="h-5 w-5 text-green-500" />
