@@ -19,8 +19,8 @@ export function PhosphoProCallout({ className }: { className?: string }) {
               <span className="text-green-500">phospho pro</span>
             </div>
             <div className="mb-3 text-muted-foreground">
-              Access the phospho teleoperation app, AI training, exclusive
-              Discord channels and more...
+              Control your robot in VR, unlock advanced AI training, access
+              exclusive Discord channels, and more.
             </div>
           </div>
           <div className="flex-shrink-0">
